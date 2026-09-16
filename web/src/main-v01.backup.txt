@@ -1,0 +1,93 @@
+import * as THREE from 'three';
+import {GLTFLoader} from '../vendor/GLTFLoader.js';
+import {SAVE_KEY,dayKey,loadStorage,persist,selectSeedling,water,eyeSequence} from './state.js';
+const $=id=>document.getElementById(id),canvas=$('scene'),wrap=canvas.parentElement;
+let storage;try{storage=window.localStorage;}catch{}
+let loaded=loadStorage(storage),save=loaded.save,blocked=loaded.status==='future';
+let ready=false,actor,eyes=[],leaves=[],stems=[],mini,scene,renderer,camera,env;
+let tap={side:null,at:-100},waterAt=-100,waterRepeat=0,shakeAt=-100,easterAt=-100,easterVariant=0,sequence={n:0,last:0},lastShake=-100;
+let now=0,nextBlink=3.8,blinkAt=-100,motionOn=false,visibilityPaused=false;
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const base=new Map();function remember(o){base.set(o,{p:o.position.clone(),r:o.rotation.clone(),s:o.scale.clone()});return o;}
+function message(text){$('message').textContent=text;}
+function storageStatus(ok){if(!ok)$('save-note').textContent='เบราว์เซอร์นี้บันทึกไม่ได้ ปิดแล้วความคืบหน้าอาจหาย';}
+if(loaded.status==='unavailable')storageStatus(false);
+if(loaded.status==='corrupt'){$('save-note').textContent='ข้อมูลเดิมอ่านไม่ได้ เริ่มสวนใหม่ได้ในเบราว์เซอร์นี้';try{storage.setItem(SAVE_KEY+'.backup',storage.getItem(SAVE_KEY));}catch{}}
+if(blocked){$('loading').textContent='ข้อมูลสวนมาจากรุ่นใหม่กว่า กรุณาเปิดเว็บรุ่นล่าสุด';}
+function updateCare(){if(!save)return;const today=dayKey();$('water').querySelector('span').textContent=save.lastWateringDate===today?'รดน้ำอีกนิด?':'รดน้ำให้ต้นกล้า';}
+function persistSave(){const ok=persist(storage,save);storageStatus(ok);return ok;}
+function start(){if(blocked||!ready)return;save=selectSeedling(save);persistSave();$('welcome').hidden=true;$('water').disabled=false;eyes.forEach((_,i)=>$(i?'eye-right':'eye-left').disabled=false);message('สวัสดี เรามาอยู่ด้วยกันนะ');updateCare();}
+$('begin').addEventListener('click',start);
+async function doWater(){if(!ready||blocked||!save?.selectedPlant)return;
+ const commit=()=>{const latest=loadStorage(storage);if(latest.status==='future'){blocked=true;message('กรุณาเปิดเว็บรุ่นล่าสุดก่อนเล่นต่อ');return;}if(latest.status==='loaded')save=latest.save;
+ const result=water(save);save=result.save;persistSave();waterAt=now;waterRepeat=result.repeats;updateCare();
+ message(result.advanced?'ขอบคุณนะ วันนี้สดชื่นขึ้นเลย':waterRepeat===2?'เอ๊ะ…เพิ่งดื่มไปเองนะ':waterRepeat===3?'ตาเริ่มจะไปคนละทางแล้วนะ':'พอแล้ววว เดี๋ยวกลายเป็นบ่อน้ำเล็ก ๆ');};
+ if(navigator.locks)await navigator.locks.request('wobble-water',commit);else commit();
+}
+$('water').addEventListener('click',doWater);
+function tapEye(side){if(!ready||blocked||!save?.selectedPlant)return;tap={side,at:now};sequence=eyeSequence(sequence,side,performance.now());if(sequence.triggered&&now-easterAt>5){easterAt=now;easterVariant=Math.random()<.5?0:1;}}
+$('eye-left').addEventListener('click',()=>tapEye('Left'));$('eye-right').addEventListener('click',()=>tapEye('Right'));
+function shake(){if(!ready||!save?.selectedPlant||now-lastShake<1.4)return;shakeAt=now;lastShake=now;message('โอ๊ะ โลกหมุนเบา ๆ');}
+async function enableMotion(){
+ if(!window.isSecureContext){message('การเขย่าต้องเปิดผ่าน HTTPS บนมือถือ แต่แตะตาเล่นได้เลย');return;}
+ if(!('DeviceMotionEvent' in window)){message('เครื่องนี้ไม่รองรับการเขย่า ลองแตะตาเล่นแทนนะ');return;}
+ try{if(typeof DeviceMotionEvent.requestPermission==='function'){const p=await DeviceMotionEvent.requestPermission();if(p!=='granted'){message('ยังไม่เปิดการเขย่า แตะตาเล่นได้เหมือนเดิมนะ');return;}}
+ if(!motionOn){window.addEventListener('devicemotion',motion,{passive:true});motionOn=true;}
+ $('motion').textContent='เปิดแล้ว · ลองเขย่าเบา ๆ';message('ลองเขย่าเบา ๆ แล้วมองตา Wobble');
+ }catch{message('เปิดการเขย่าไม่ได้ในตอนนี้ แตะตาเล่นก่อนได้นะ');}
+}
+let gravityPrev=null;
+function motion(e){if(document.hidden)return;const a=e.acceleration;let magnitude=0;if(a&&[a.x,a.y,a.z].every(Number.isFinite)){magnitude=Math.hypot(a.x,a.y,a.z);}else{const g=e.accelerationIncludingGravity;if(!g||![g.x,g.y,g.z].every(Number.isFinite))return;const current=[g.x,g.y,g.z];if(gravityPrev)magnitude=Math.hypot(...current.map((n,i)=>n-gravityPrev[i]));gravityPrev=current;}
+ if(magnitude>11)shake();}
+$('motion').addEventListener('click',enableMotion);
+window.addEventListener('storage',e=>{if(e.key!==SAVE_KEY)return;const r=loadStorage(storage);if(r.status==='future'){blocked=true;$('water').disabled=true;message('ข้อมูลสวนอัปเดตแล้ว กรุณาเปิดเว็บรุ่นล่าสุด');}else if(r.status==='loaded'){save=r.save;updateCare();}});
+setInterval(updateCare,15000);
+const drops=[],ripples=[];
+async function boot(){
+ if(blocked)return;
+ try{
+ renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'low-power'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.18;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+ scene=new THREE.Scene();scene.fog=new THREE.Fog('#edf0e3',8,17);
+ camera=new THREE.PerspectiveCamera(34,1,.1,40);camera.position.set(.16,3.0,6.3);camera.lookAt(0,1.3,0);
+ scene.add(new THREE.HemisphereLight('#fff8e6','#b1bda1',2.3));const sun=new THREE.DirectionalLight('#fff0ce',3.1);sun.position.set(-3.5,6,4);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-4;sun.shadow.camera.right=4;sun.shadow.camera.top=5;sun.shadow.camera.bottom=-4;sun.shadow.normalBias=.03;scene.add(sun);
+ const loader=new GLTFLoader();const [g,w]=await Promise.all([loader.loadAsync('./public/assets/models/wobble-pothos-v01.glb'),loader.loadAsync('./public/assets/models/window-v01.glb')]);
+ actor=g.scene;env=w.scene;scene.add(actor,env);
+ // Ignore any non-game source objects; export verification also checks the inventory.
+ for(const root of [actor,env]){const discard=[];root.traverse(o=>{if(o.name==='Cube'||o.isCamera||o.isLight)discard.push(o);if(o.isMesh){o.castShadow=true;o.receiveShadow=true;if(o.name.startsWith('Leaf'))o.material.side=THREE.DoubleSide;}});discard.forEach(o=>o.removeFromParent());}
+ actor.rotation.y=-.08;
+ eyes=['Left','Right'].map(side=>({side,rig:remember(actor.getObjectByName('EyeRig'+side)),pupil:remember(actor.getObjectByName('Pupil'+side)),white:actor.getObjectByName('Eye'+side)}));
+ actor.traverse(o=>{if(o.name.startsWith('LeafPivot_'))leaves.push(remember(o));if(o.name.startsWith('Stem_'))stems.push(remember(o));});
+ // A small, original Wobble guest, made from the same approved pot silhouette.
+ mini=new THREE.Group();for(const name of ['Pot','EyeRigLeft','EyeRigRight'])mini.add(actor.getObjectByName(name).clone(true));mini.scale.setScalar(.24);mini.visible=false;scene.add(mini);
+ const waterMat=new THREE.MeshPhysicalMaterial({color:'#97bfd0',transparent:true,opacity:.72,roughness:.2});
+ for(let i=0;i<20;i++){const d=new THREE.Mesh(new THREE.SphereGeometry(.035,8,6),waterMat);d.scale.y=1.7;d.visible=false;scene.add(d);drops.push(d);}
+ for(let i=0;i<3;i++){const r=new THREE.Mesh(new THREE.TorusGeometry(.1,.009,5,32),new THREE.MeshBasicMaterial({color:'#9cbcd0',transparent:true,opacity:.5}));r.rotation.x=-Math.PI/2;r.position.y=1.58;r.visible=false;scene.add(r);ripples.push(r);}
+ new ResizeObserver(resize).observe(wrap);resize();ready=true;$('loading').hidden=true;$('loading').style.display='none';$('water').disabled=!save.selectedPlant;eyes.forEach((_,i)=>$(i?'eye-right':'eye-left').disabled=!save.selectedPlant);$('welcome').hidden=!!save.selectedPlant;updateCare();
+ requestAnimationFrame(frame);
+ }catch(err){console.error(err);$('loading').innerHTML='เปิดสวนไม่สำเร็จ <button id="retry">ลองอีกครั้ง</button>';$('retry').onclick=()=>location.reload();}
+}
+function resize(){if(!renderer)return;const r=wrap.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
+function targets(){if(!actor)return;eyes.forEach(({rig},i)=>{const p=rig.getWorldPosition(new THREE.Vector3()).project(camera);const b=$(i?'eye-right':'eye-left');b.style.left=`${(p.x*.5+.5)*wrap.clientWidth}px`;b.style.top=`${(-p.y*.5+.5)*wrap.clientHeight}px`;});}
+let lastFrame=0,lastTime=0;
+function frame(ms){requestAnimationFrame(frame);if(document.hidden){lastTime=ms;return;}if(ms-lastFrame<1000/30)return;const dt=Math.min(.08,(ms-lastTime)/1000||0);lastTime=ms;lastFrame=ms;now+=dt;
+ const wt=now-waterAt,st=now-shakeAt,et=now-easterAt,freeze=et>=0&&et<.5;
+ if(now>nextBlink){blinkAt=now;nextBlink=now+4+Math.random()*5;}
+ const bt=now-blinkAt;let blink=bt<.2?1-.94*Math.sin(Math.PI*bt/.2):1;
+ if(freeze)blink=1;
+ for(const {side,rig,pupil} of eyes){const b=base.get(rig),p=base.get(pupil);rig.scale.copy(b.s);rig.scale.y*=blink;pupil.position.copy(p.p);rig.rotation.copy(b.r);
+ if(!freeze){
+  const idle=reduced?0:Math.sin(now*.37)*.014;pupil.position.x+=idle;
+  if(wt<2.2){pupil.position.y+=.045;if(waterRepeat>=3){pupil.position.x+=(side==='Left'?.065:-.065);rig.rotation.z=(side==='Left'?1:-1)*.1*Math.sin(wt*7);}else if(waterRepeat===2)pupil.position.x+=.035;}
+  if(now-tap.at<.55&&tap.side===side){const a=Math.sin((now-tap.at)/.55*Math.PI);rig.scale.multiplyScalar(1+a*.1);pupil.position.x+=a*.045;}
+  if(st<1.5){const a=(1-st/1.5)*.065;pupil.position.x+=Math.cos(st*19)*a;pupil.position.y+=Math.sin(st*19)*a;}
+ }
+ }
+ leaves.forEach((o,i)=>{const b=base.get(o);o.rotation.copy(b.r);if(!freeze){const wind=reduced?.004:.026;o.rotation.x+=wind*Math.sin(now*(.63+i*.07)+i*1.9)+wind*.35*Math.sin(now*.29+i);o.rotation.z+=wind*.5*Math.sin(now*.55+i*.8);if(wt<2.2)o.rotation.x+=.045*Math.sin(wt*11+i)*Math.exp(-wt*2);if(st<1.5)o.rotation.x+=.05*Math.sin(st*9+i)*(1-st/1.5);}});
+ stems.forEach((o,i)=>{o.rotation.z=base.get(o).r.z+(reduced?0:.004*Math.sin(now*.7+i));});
+ drops.forEach((d,i)=>{d.visible=wt>=0&&wt<2.2;if(d.visible){const t=(wt*1.2+i/20)%1;d.position.set(Math.sin(i*7.7)*.35,3.4-t*1.8,Math.cos(i*4.1)*.3);}});
+ ripples.forEach((r,i)=>{r.visible=wt>=.4&&wt<2.5;if(r.visible){const t=(wt+i*.3)%1;r.scale.setScalar(1+t*3);r.material.opacity=(1-t)*.4;}});
+ mini.visible=et>=.5&&et<3.9;if(mini.visible){const t=(et-.5)/3.4;mini.position.set(easterVariant===0?-1.65+t*3.3:1.12,-.06+Math.abs(Math.sin(t*Math.PI*4))*.12,-.35);mini.rotation.y=Math.sin(t*8)*.2;if(easterVariant===1)mini.scale.setScalar(.24*Math.sin(Math.PI*t)**.25);else mini.scale.setScalar(.24);}
+ renderer.render(scene,camera);targets();
+}
+if(new URLSearchParams(location.search).has('test'))window.__wobble={getState:()=>structuredClone(save),tapEye,water:doWater,shake,getReady:()=>ready,getEffects:()=>({waterRepeat,easterActive:now-easterAt<4,shakeActive:now-shakeAt<1.5}),getPerformance:()=>({drawCalls:renderer?.info.render.calls,triangles:renderer?.info.render.triangles}),motion};
+boot();

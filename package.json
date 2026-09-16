@@ -1,0 +1,10 @@
+{
+  "name": "wobble-garden",
+  "private": true,
+  "version": "0.6.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test ../tests/state.test.mjs ../tests/selection.test.mjs ../tests/growth.test.mjs",
+    "start": "python3 serve.py"
+  }
+}
