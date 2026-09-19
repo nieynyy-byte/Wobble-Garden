@@ -1,4 +1,7 @@
 import * as T from 'three';
+import {COUNTS} from './plant-architecture.js';
+import {PLANT_LAYOUTS} from './plant-layouts.js';
+import {mergeGeometries} from '../vendor/BufferGeometryUtils.js';
 const settings={
  pothos:{color:'#578636',width:.29,length:.79,count:5,roughness:.5},
  fittonia:{color:'#517847',width:.19,length:.43,count:10,roughness:.72},
@@ -10,7 +13,7 @@ const cache=new Map();
 function leafMaterial(id){
  if(cache.has(id))return cache.get(id);
  const width=128,height=256,data=new Uint8Array(width*height*4),cfg=settings[id];
- const base=new T.Color(cfg.color),pale=new T.Color(id==='fittonia'?'#d3c4b4':id==='pothos'?'#b0b970':'#a3b775');
+ const base=new T.Color(cfg.color),pale=new T.Color(id==='fittonia'?'#d3c4b4':id==='pothos'?'#c9bd57':'#a3b775');
  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
   const t=y/(height-1),u=x/(width-1)*2-1;
   const center=Math.exp(-Math.pow(u/ .021,2));
@@ -19,7 +22,8 @@ function leafMaterial(id){
   const vein=Math.exp(-Math.pow(distance/.036,2))*(1-Math.abs(u)*.75);
   const speck=Math.sin(x*127.1+y*311.7)*43758.5453%1;
   let amount=id==='fittonia'?Math.max(center*.8,vein*.66):Math.max(center*.33,vein*.13);
-  if(id==='pothos')amount+=Math.max(0,Math.sin(t*19+u*10)+Math.sin(t*31-u*13)-1.1)*.3;
+  if(id==='pothos')amount+=Math.max(0,Math.sin(t*8+u*4)+Math.sin(t*13-u*6)-.45)*.55;
+  if(id==='syngonium')amount+=.62*Math.exp(-Math.pow(u/.67,4))*(.6+.4*Math.sin(t*13+u*5));
   if(id==='sansevieria')amount=.12+.23*(.5+.5*Math.sin(t*83+u*4+Math.sin(u*12)*.7))**5+Math.max(0,Math.abs(u)-.86)*1.5;
   const c=base.clone().lerp(pale,Math.min(.85,amount)).multiplyScalar(.88+.11*Math.sin(t*Math.PI)+(speck*.022));
   c.convertLinearToSRGB();const i=(y*width+x)*4;data[i]=c.r*255;data[i+1]=c.g*255;data[i+2]=c.b*255;data[i+3]=255;
@@ -30,11 +34,11 @@ function leafMaterial(id){
 function widthAt(id,t){
  if(id==='pothos')return Math.sin(Math.PI*Math.pow(t,.65))**.85;
  if(id==='syngonium')return (t<.22?.65+t*1.6:Math.max(0,(1-t)/.78)**1.35)*Math.sin(Math.min(1,t*16)*Math.PI/2);
- if(id==='peperomia')return Math.sin(Math.PI*Math.pow(t,.85))**.62;
+ if(id==='peperomia')return Math.sin(Math.PI*Math.pow(t,.68))**.55;
  return Math.sin(Math.PI*t)**(id==='sansevieria'?.72:.85);
 }
 function blade(id,len,width,seed){
- const rows=32,cols=12,stride=cols+1,sideSize=(rows+1)*stride,verts=[],uv=[],indices=[];
+ const rows=16,cols=8,stride=cols+1,sideSize=(rows+1)*stride,verts=[],uv=[],indices=[];
  const thickness=id==='peperomia'?.012:id==='sansevieria'?.014:.004;
  for(let side=0;side<2;side++)for(let r=0;r<=rows;r++)for(let c=0;c<=cols;c++){
   const t=r/rows,u=c/cols*2-1,w=widthAt(id,t)*width;
@@ -51,35 +55,35 @@ function blade(id,len,width,seed){
  for(let i=0;i<rim.length;i++){const a=rim[i],b=rim[(i+1)%rim.length];indices.push(a,b,a+sideSize,b,b+sideSize,a+sideSize);}
  const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geo.setIndex(indices);geo.computeVertexNormals();return geo;
 }
+
+const layouts=new Map();
+export function plantLayout(id){
+ if(!settings[id])id='pothos';
+ if(!layouts.has(id)){
+  const graph=PLANT_LAYOUTS[id],geometries=new Map();
+  for(const l of graph.leaves)geometries.set(l.id,blade(id,l.length,l.width,l.id));
+  const leaves=graph.leaves;
+  layouts.set(id,{leaves,branches:graph.branches,geometries});
+ }
+ return layouts.get(id);
+}
 export function makePlant(id,stage=1){
- stage=id==='pothos'?Math.max(1,Math.min(6,Math.floor(stage))):1;
- const cfg=settings[id],root=new T.Group();root.name=id==='pothos'?'PothosSeedling':'Plant_'+id;root.userData.species=id;root.userData.growthStage=stage;
- const stemMat=new T.MeshStandardMaterial({color:id==='fittonia'?'#737d4c':'#66834a',roughness:.73});
- const count=id==='pothos'?[5,7,9,9,10,11][stage-1]:cfg.count;
- for(let i=0;i<count;i++){
-  const angle=i*2.399963+.25,len=cfg.length*(.78+(i%3)*.12)*(1+(stage-1)*.035),upright=id==='sansevieria';
-  const low=id==='fittonia',spread=low?.3:upright?.19:.17+(stage-1)*.032;
-  const height=upright?0:low?.25+(i%3)*.1:id==='pothos'&&i>=5?.42+((i-5)%3)*.17+(stage-1)*.02:.67+(i%3)*.18+(stage-1)*.065;
-  const base=new T.Vector3(Math.cos(angle)*.09,1.55,Math.sin(angle)*.09);
-  const end=new T.Vector3(Math.cos(angle)*spread,1.55+height,Math.sin(angle)*spread);
-  const pivot=new T.Group();pivot.name='LeafPivot_'+i;pivot.position.copy(end);pivot.rotation.y=angle;pivot.rotation.x=upright?.09+(i%3)*.08:.3+(i%3)*.15;pivot.rotation.z=(i%2?1:-1)*.06;
-  pivot.userData.stiffness=upright?.22:id==='peperomia'?.6:1;root.add(pivot);
-  if(!upright){const mid=base.clone().lerp(end,.55);mid.x+=.045*Math.cos(angle+.5);const stem=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3([base,mid,end]),16,low?.009:.013,6,false),stemMat);stem.name='Petiole_'+i;stem.castShadow=true;root.add(stem);}
-  const leaf=new T.Mesh(blade(id,len,cfg.width*(.86+(i%3)*.07)*(1+(stage-1)*.035),i),leafMaterial(id));leaf.name='Leaf_'+i;leaf.castShadow=leaf.receiveShadow=true;pivot.add(leaf);
+ if(!settings[id])id='pothos';stage=Math.max(1,Math.min(7,Math.floor(stage)||1));
+ const root=new T.Group();root.name=id==='pothos'?'PothosSeedling':'Plant_'+id;
+ root.userData={species:id,growthStage:stage,leafCount:COUNTS[id][stage-1]};
+ const layout=plantLayout(id),stemMat=new T.MeshStandardMaterial({color:id==='fittonia'?'#737d4c':'#66834a',roughness:.73});
+ function stem(points,radius,name){
+  const pts=points.map(p=>new T.Vector3(...p));if(pts[0].distanceTo(pts.at(-1))<.001)return;
+  const curve=new T.CatmullRomCurve3(pts),mesh=new T.Mesh(new T.TubeGeometry(curve,8,radius,5,false),stemMat);mesh.name=name;mesh.castShadow=true;root.add(mesh);
  }
- if(id==='pothos'&&stage>=4){
-  const vineLeaves=[3,6,10][stage-4];
-  for(let side=0;side<2;side++){
-   const sign=side===0?-1:1,drop=[.36,.83,1.2][stage-4]*(side?.82:1);
-   const path=new T.CatmullRomCurve3([new T.Vector3(sign*.35,1.6,-.3),new T.Vector3(sign*.82,1.78,-.2),new T.Vector3(sign*1.04,1.5,-.12),new T.Vector3(sign*1.11,1.55-drop,.13)]);
-   const vine=new T.Mesh(new T.TubeGeometry(path,38,.016,6,false),stemMat);vine.name='Vine_'+side;vine.castShadow=true;root.add(vine);
-   const n=Math.floor(vineLeaves/2)+(side===0?vineLeaves%2:0);
-   for(let j=0;j<n;j++){
-    const t=.43+(j+.4)/n*.52,point=path.getPoint(t),pivot=new T.Group();pivot.name='LeafPivot_vine_'+side+'_'+j;pivot.position.copy(point);pivot.rotation.set(.48+(j%2)*.2,sign*(.65+(j%2)*.5),sign*.06);pivot.userData.stiffness=.8;root.add(pivot);
-    const len=.39+(j%3)*.045,leaf=new T.Mesh(blade('pothos',len,.17+(j%2)*.025,j+10),leafMaterial('pothos'));leaf.name='Leaf_vine_'+side+'_'+j;leaf.castShadow=leaf.receiveShadow=true;pivot.add(leaf);
-   }
-  }
+ for(const b of layout.branches)if(b.born<=stage)stem(b.points,id==='peperomia'?.025:.012,'Stem_'+b.id);
+ for(const l of layout.leaves)if(l.born<=stage){
+  const pivot=new T.Group();pivot.name='LeafPivot_'+l.id;pivot.position.fromArray(l.position);pivot.rotation.set(...l.rotation);
+  pivot.userData={stiffness:id==='sansevieria'?.12:id==='peperomia'?.35:.55,bornStage:l.born,branch:l.branch};root.add(pivot);
+  const leaf=new T.Mesh(layout.geometries.get(l.id),leafMaterial(id));leaf.name='Leaf_'+l.id;leaf.castShadow=leaf.receiveShadow=true;pivot.add(leaf);
+  if(id!=='sansevieria')stem([l.start,[(l.start[0]+l.position[0])*.5,(l.start[1]+l.position[1])*.5+.025,(l.start[2]+l.position[2])*.5],l.position],id==='peperomia'?.018:.009,'Petiole_'+l.id);
+  else if(l.spacingAttempt>20)stem([l.start,l.position],.025,'LeafBase_'+l.id);
  }
- let leafCount=0;root.traverse(o=>{if(o.name.startsWith('Leaf_'))leafCount++;});root.userData.leafCount=leafCount;
+ const stems=root.children.filter(o=>o.isMesh);if(stems.length){const merged=new T.Mesh(mergeGeometries(stems.map(o=>o.geometry)),stemMat);merged.name='PlantBranches';merged.castShadow=true;for(const o of stems){root.remove(o);o.geometry.dispose();}root.add(merged);}
  return root;
 }
