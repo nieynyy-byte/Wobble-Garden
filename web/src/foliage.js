@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {pothosSurface} from './pothos-surface.js';
 import {COUNTS} from './plant-architecture.js';
 import {PLANT_LAYOUTS} from './plant-layouts.js';
 import {mergeGeometries} from '../vendor/BufferGeometryUtils.js';
@@ -80,7 +81,8 @@ export function makePlant(id,stage=1){
  for(const l of layout.leaves)if(l.born<=stage){
   const pivot=new T.Group();pivot.name='LeafPivot_'+l.id;pivot.position.fromArray(l.position);pivot.rotation.set(...l.rotation);
   pivot.userData={stiffness:id==='sansevieria'?.12:id==='peperomia'?.35:.55,bornStage:l.born,branch:l.branch};root.add(pivot);
-  const leaf=new T.Mesh(layout.geometries.get(l.id),leafMaterial(id));leaf.name='Leaf_'+l.id;leaf.castShadow=leaf.receiveShadow=true;pivot.add(leaf);
+  const surface=id==='pothos'?pothosSurface(l,stage,layout.geometries.get(l.id)):null;
+  const leaf=new T.Mesh(surface?.geometry||layout.geometries.get(l.id),surface?.material||leafMaterial(id));leaf.name='Leaf_'+l.id;leaf.castShadow=leaf.receiveShadow=true;pivot.add(leaf);
   if(id!=='sansevieria')stem([l.start,[(l.start[0]+l.position[0])*.5,(l.start[1]+l.position[1])*.5+.025,(l.start[2]+l.position[2])*.5],l.position],id==='peperomia'?.018:.009,'Petiole_'+l.id);
   else if(l.spacingAttempt>20)stem([l.start,l.position],.025,'LeafBase_'+l.id);
  }
