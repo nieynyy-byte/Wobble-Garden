@@ -8,3 +8,13 @@
 .growth-preview{top:calc(env(safe-area-inset-top) + 82px)}.growth-preview input{height:44px}@media(max-height:800px){.growth-preview p{display:none}}
 
 #music .mute-slash{display:none}#music.muted .mute-slash{display:block}#music.muted{opacity:.6}
+
+/* Home-only original artwork, with the transparent source margins framed in CSS. */
+.home-brand{width:145px;padding:10px 13px;background:#344b39;border-radius:16px;margin:0 0 25px}
+.home-brand img{display:block;width:100%;height:auto}
+.home-greeting{display:flex;align-items:center;gap:14px;margin:0 0 14px}
+.home-greeting h2{flex:1;min-width:0;margin:0;font-size:34px}
+.home-friend{flex:0 0 100px;aspect-ratio:941/882;position:relative;overflow:hidden;pointer-events:none;transform:rotate(-7deg)}
+.home-friend img{position:absolute;width:217.641%;max-width:none;height:auto;left:-54.729%;top:-71.769%}
+@media(max-width:370px){.home-greeting{gap:10px}.home-greeting h2{font-size:29px}.home-friend{flex-basis:82px}}
+@media(max-height:740px){.home-brand{width:125px;margin-bottom:18px;padding:8px 11px}.home-greeting h2{font-size:29px}.home-friend{flex-basis:82px}}
