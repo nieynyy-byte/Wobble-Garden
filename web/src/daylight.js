@@ -2,12 +2,12 @@ import * as T from 'three';
 // Exterior is a local photographic plate well behind the physical window.
 // It is deliberately separate from glass/frame, allowing natural orbit parallax.
 export function outdoorGarden(texture){
- const plane=new T.Mesh(new T.PlaneGeometry(42,28),new T.MeshBasicMaterial({map:texture,toneMapped:false,color:'#e4e5d9'}));
- plane.position.set(4,7,-18);plane.name='Distant garden photographic plate';plane.userData.noShadow=true;return plane;
+ const plane=new T.Mesh(new T.PlaneGeometry(36,36*941/1672),new T.MeshBasicMaterial({map:texture,toneMapped:false,color:'#e4e5d9'}));
+ plane.position.set(.5,4.5,-18);plane.name='Distant garden photographic plate';plane.userData.noShadow=true;return plane;
 }
 export async function loadEnvironmentTextures(){
  const loader=new T.TextureLoader();
- const [garden,oak]=await Promise.all(['garden-exterior-v07.jpg','oak-v07.jpg'].map(name=>loader.loadAsync(new URL('../public/assets/textures/'+name,import.meta.url).href)));
+ const [garden,oak]=await Promise.all(['view-wobble-garden.png','oak-v07.jpg'].map(name=>loader.loadAsync(new URL('../public/assets/textures/'+name,import.meta.url).href)));
  for(const t of [garden,oak]){t.colorSpace=T.SRGBColorSpace;t.anisotropy=4;}
  oak.wrapS=oak.wrapT=T.RepeatWrapping;
  return {garden,oak};

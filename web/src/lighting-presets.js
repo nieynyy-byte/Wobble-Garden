@@ -128,7 +128,7 @@ export const LIGHTING_PRESETS=[
   {
     "id": "night",
     "label": "Night",
-    "note": "Dark room with soft reflected city light on Wobble",
+    "note": "Dark room with faint moonlight, stars and unlit foliage",
     "sun": [
       -2,
       -4,
