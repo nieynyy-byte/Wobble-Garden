@@ -1,38 +1,53 @@
 import * as T from 'three';
 
-// A single depth-only foliage card outside the physical window. It contributes
-// real sun shadows on the table, pot and wall without extra visible geometry.
+// Sparse branching silhouettes at different outdoor depths, sharing the real sun.
 export function createLeafShadows(scene,{reducedMotion=false}={}){
- const canvas=document.createElement('canvas');canvas.width=canvas.height=512;
- const ctx=canvas.getContext('2d');ctx.fillStyle='black';ctx.fillRect(0,0,512,512);
  let seed=173;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
- ctx.fillStyle='white';ctx.strokeStyle='white';ctx.lineCap='round';
- for(let branch=0;branch<9;branch++){
-  const x=random()*512,y=random()*512,angle=random()*Math.PI*2;
-  ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.lineWidth=2.2;
-  ctx.beginPath();ctx.moveTo(-70,0);ctx.quadraticCurveTo(0,8,90,-6);ctx.stroke();
-  for(let i=0;i<10;i++){
-   const xx=-62+i*16,side=i%2?1:-1,yy=side*(14+random()*7);
-   ctx.save();ctx.translate(xx,yy);ctx.rotate(side*(.6+random()*.4));
-   ctx.beginPath();ctx.ellipse(0,0,13+random()*7,5+random()*3,0,0,Math.PI*2);ctx.fill();ctx.restore();
+ const cards=[];
+ for(let layer=0;layer<3;layer++){
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=1024;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='black';ctx.fillRect(0,0,1024,1024);
+  ctx.fillStyle='white';ctx.strokeStyle='white';ctx.lineCap='round';
+  function leaf(x,y,angle,length,width){
+   ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+   const bend=(random()-.5)*length*.22;
+   ctx.beginPath();ctx.moveTo(0,0);
+   ctx.bezierCurveTo(length*.22,-width*(.65+random()*.5),length*.72,-width*.7,length,bend);
+   ctx.bezierCurveTo(length*.68,width*(.45+random()*.6),length*.18,width*.8,0,0);
+   ctx.fill();ctx.restore();
   }
-  ctx.restore();
+  function twig(x,y,angle,length,width,depth){
+   ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+   const bend=(random()-.5)*length*.4;
+   ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(length*.5,bend,length,bend*.6);ctx.stroke();
+   let along=.12+random()*.12;
+   while(along<.96){
+    const side=random()<.5?-1:1,xx=along*length,yy=bend*(2*along-1.4*along*along);
+    const direction=side*(.35+random()*1.05),size=(22+random()*45)*(1-along*.35);
+    if(depth>0&&random()<.46)twig(xx,yy,direction,length*(.27+random()*.2),Math.max(.8,width*.48),depth-1);
+    else if(random()>.12)leaf(xx,yy,direction,size,size*(.16+random()*.25));
+    along+=.10+random()*.17;
+   }
+   leaf(length,bend*.6,(random()-.5)*.4,22+random()*25,7+random()*7);ctx.restore();
+  }
+  for(let branch=0;branch<3;branch++)twig(60+random()*800,80+random()*750,random()*Math.PI*2,180+random()*210,2+random()*2,2);
+  const map=new T.CanvasTexture(canvas);map.colorSpace=T.NoColorSpace;
+  const material=new T.MeshBasicMaterial({alphaMap:map,alphaTest:.45,side:T.DoubleSide,colorWrite:false,depthWrite:false});
+  const card=new T.Mesh(new T.PlaneGeometry(10,10),material);
+  card.name='Outside foliage shadow caster '+layer;card.position.set(2.4,5.7,-3.6-layer*.8);card.castShadow=true;
+  card.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,alphaMap:map,alphaTest:.45,side:T.DoubleSide});
+  scene.add(card);cards.push(card);
  }
- const map=new T.CanvasTexture(canvas);map.colorSpace=T.NoColorSpace;
- const material=new T.MeshBasicMaterial({alphaMap:map,alphaTest:.45,side:T.DoubleSide,colorWrite:false,depthWrite:false});
- const card=new T.Mesh(new T.PlaneGeometry(10,10),material);
- card.name='Outside foliage shadow caster';card.position.set(2.4,5.7,-3.6);card.castShadow=true;card.receiveShadow=false;
- card.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,alphaMap:map,alphaTest:.45,side:T.DoubleSide});
- scene.add(card);
  return {
   update(seconds,sunPower){
-   card.visible=sunPower>.15;
    const t=reducedMotion?0:seconds;
-   card.position.x=2.4+Math.sin(t*.31)*.055+Math.sin(t*.17)*.025;
-   card.position.y=5.7+Math.sin(t*.23)*.035;
-   card.rotation.z=Math.sin(t*.19)*.009;
+   cards.forEach((card,i)=>{card.visible=sunPower>.15;const phase=i*2.3;
+    card.position.x=2.4+Math.sin(t*(.21+i*.035)+phase)*(.035+i*.014);
+    card.position.y=5.7+Math.sin(t*.17+phase)*.025;
+    card.rotation.z=Math.sin(t*.13+phase)*.006;
+   });
   },
-  getState:()=>({enabled:card.visible,offset:card.position.toArray(),reducedMotion})
+  getState:()=>({enabled:cards[0].visible,offset:cards[0].position.toArray(),layers:cards.length,reducedMotion})
  };
 }
 
