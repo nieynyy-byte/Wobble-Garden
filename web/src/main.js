@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {createGardenWeather} from './garden-weather.js';
 import {createGardenMusic} from './garden-music.js';
 import {createGuest9978} from './guest-9978.js';
 import {ALTERNATING_GAP_MS} from './guest-state.js';
@@ -6,6 +7,7 @@ import {GLTFLoader} from '../vendor/GLTFLoader.js';
 import {SAVE_KEY,dayKey,loadStorage,persist,isLocked,eyeSequence} from './state.js';
 import {createLocalLighting} from './local-lighting.js';
 import {createCrystal} from './crystal.js';
+import {createCrystalHolds} from './crystal-hold.js';
 import {canGlow,nightAmount} from './crystal-state.js';
 import {commitWater,commitChoice,GARDEN_LOCK} from './garden-store.js';
 import {PLANTS,plantById} from './plants.js';
@@ -17,10 +19,11 @@ import {growthForDays,growthStage,PREVIEW_DAYS,normalizeGrowthDays} from './grow
 const $=id=>document.getElementById(id),canvas=$('scene'),wrap=canvas.parentElement;
 let storage;try{storage=window.localStorage;}catch{}
 let loaded=loadStorage(storage),save=loaded.save,blocked=loaded.status==='future';
-let crystal,localLighting,guest;
+let crystal,localLighting,guest,weather,reviewHour=null;
 const music=createGardenMusic({storage,onChange:s=>{const b=$('music');b.setAttribute('aria-pressed',String(!s.muted));b.setAttribute('aria-label',s.muted?'Turn music on':'Mute music');b.classList.toggle('muted',s.muted);}});
+$('local-weather').onclick=()=>weather?.setEnabled(!weather.getState().enabled);
 $('music').onclick=()=>music.setMuted(!music.getState().muted);
-for(const event of ['pointerdown','keydown'])document.addEventListener(event,()=>{if(!blocked)music.unlock();},{capture:true});
+for(const event of ['pointerdown','keydown'])document.addEventListener(event,()=>{if(!blocked){music.unlock();weather?.unlock();guest?.unlockSound();}},{capture:true});
 setInterval(()=>music.update(),100);
 document.addEventListener('visibilitychange',()=>music.setHidden(document.hidden));
 window.addEventListener('focus',()=>music.update());
@@ -122,10 +125,10 @@ async function boot(){
  camera=new THREE.PerspectiveCamera(34,1,.1,40);camera.position.set(.25,3.4,8.8);camera.lookAt(0,1.8,0);
 
  const loader=new GLTFLoader();const g=await loader.loadAsync('./public/assets/models/wobble-pothos-v03.glb');
- actor=g.scene;env=makeRoom(await loadEnvironmentTextures());scene.add(actor,env);crystal=createCrystal({reducedMotion:reduced});scene.add(crystal.root);
+ actor=g.scene;env=makeRoom(await loadEnvironmentTextures());scene.add(actor,env);crystal=createCrystal({reducedMotion:reduced,renderer});scene.add(crystal.root);await crystal.ready;
  // Ignore any non-game source objects; export verification also checks the inventory.
  for(const root of [actor,env]){const discard=[];root.traverse(o=>{if(o.name==='Cube'||o.isCamera||o.isLight)discard.push(o);if(o.isMesh){o.castShadow=!o.userData.noShadow;o.receiveShadow=!o.userData.noShadow;if(o.name.startsWith('Leaf'))o.material.side=THREE.DoubleSide;}});discard.forEach(o=>o.removeFromParent());}
- actor.rotation.y=-.08;refineMaterials(actor);guest=createGuest9978({scene,actor,camera,storage,onStart:()=>{easterAt=-100;clearTimeout(legacyEyeTimer);},reducedMotion:reduced,eligible:()=>ready&&!blocked&&!!save?.selectedPlant&&previewDay===null&&$('welcome').hidden&&!$('details').open});localLighting=createLocalLighting(scene,renderer,env,{reducedMotion:reduced});localLighting.register(actor);const sourcePlant=actor.getObjectByName('PothosSeedling');sourcePlant.name='SourcePothosSeedling';sourcePlant.visible=false;
+ actor.rotation.y=-.08;refineMaterials(actor);guest=createGuest9978({scene,actor,camera,storage,muted:()=>music.getState().muted,onStart:()=>{easterAt=-100;clearTimeout(legacyEyeTimer);},reducedMotion:reduced,eligible:()=>ready&&!blocked&&!!save?.selectedPlant&&previewDay===null&&$('welcome').hidden&&!$('details').open});localLighting=createLocalLighting(scene,renderer,env,{reducedMotion:reduced});localLighting.register(actor);weather=createGardenWeather({scene,room:env,lighting:localLighting,storage,music,reducedMotion:reduced,onChange:s=>{const b=$('local-weather');b.textContent=s.enabled?'Turn local weather off':'Use my local weather';b.setAttribute('aria-pressed',String(s.enabled));$('weather-status').textContent=({live:'Weather connected',locating:'Finding local weather…',denied:'Location was not allowed. Seasonal view remains active.',unavailable:'Weather unavailable. We’ll try again later.',stale:'Weather is out of date. Rain paused.',off:'Seasonal view follows the Thai calendar.'})[s.status]||'';}});const sourcePlant=actor.getObjectByName('PothosSeedling');sourcePlant.name='SourcePothosSeedling';sourcePlant.visible=false;
  eyes=['Left','Right'].map(side=>({side,rig:remember(actor.getObjectByName('EyeRig'+side)),pupil:remember(actor.getObjectByName('Pupil'+side)),white:actor.getObjectByName('Eye'+side)}));
  actor.traverse(o=>{if(o.name.startsWith('LeafPivot_'))leaves.push(remember(o));if(o.name.startsWith('Stem_'))stems.push(remember(o));});
  // A small, original Wobble guest, made from the same approved pot silhouette.
@@ -156,27 +159,31 @@ function targets(){
 
 let pan={x:0,y:0},smoothPan={x:0,y:0};
 installCameraDrag(wrap,{enabled:()=>ready&&!blocked&&$('welcome').hidden&&!$('details').open,onChange:p=>{pan=p;},onFirstDrag:()=>message('A little look around.')});
-let crystalPointer=null;
-wrap.addEventListener('pointerdown',e=>{if(e.target!==canvas||!e.isPrimary)return;crystalPointer={x:e.clientX,y:e.clientY,id:e.pointerId};});
-wrap.addEventListener('pointerup',e=>{
- const start=crystalPointer;crystalPointer=null;
- if(!start||start.id!==e.pointerId||Math.hypot(e.clientX-start.x,e.clientY-start.y)>6||previewDay!==null||blocked||!ready||!$('welcome').hidden||$('details').open)return;
- const rect=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1),camera);
- if(guest?.interact(ray))return;if(!crystal.root.visible)return;
- const nearCrystal=crystal.getTapPositions().some(position=>{const p=position.project(camera);return Math.hypot(e.clientX-rect.left-(p.x*.5+.5)*rect.width,e.clientY-rect.top-(-p.y*.5+.5)*rect.height)<=22;});
- if(!ray.intersectObjects(crystal.targets(),false).length&&!nearCrystal)return;
- const latest=loadStorage(storage);if(!['loaded','migrated'].includes(latest.status))return;
- crystal.tap(latest.save,now);
-});
-wrap.addEventListener('pointercancel',()=>{crystalPointer=null;});
+const crystalReview=new URLSearchParams(location.search).get('review')==='crystal'&&launchPreview;
+const crystalInputSave=()=>crystalReview&&previewDay!==null?{selectedPlant:'pothos',wateringCount:previewDay,lastWateringDate:dayKey(new Date())}:loadStorage(storage).save;
+const crystalHolds=createCrystalHolds({eligible:()=>!blocked&&(previewDay===null||crystalReview)&&$('welcome').hidden&&!$('details').open&&!document.hidden&&canGlow(crystalInputSave()),trigger:id=>crystal.trigger(id,crystalInputSave(),performance.now()/1000)});
+function sceneRay(e){const r=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);return ray;}
+window.addEventListener('blur',()=>crystalHolds.clear());
+const guestPointers=new Map();
+wrap.addEventListener('pointerdown',e=>{
+ if(e.target!==canvas||blocked||!ready||!$('welcome').hidden||$('details').open||(e.pointerType==='mouse'&&e.button!==0))return;
+ const ray=sceneRay(e),hit=ray.intersectObjects(crystal.targets(),false)[0];
+ const blocker=ray.intersectObject(actor,true).find(h=>{let o=h.object;while(o){if(!o.visible)return false;o=o.parent;}return true;});
+ if(hit&&(!blocker||hit.distance<blocker.distance)&&(previewDay===null||crystalReview)){e.stopImmediatePropagation();wrap.setPointerCapture(e.pointerId);crystalHolds.begin(e.pointerId,hit.object.userData.crystalId,e.clientX,e.clientY);}
+ else guestPointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+},true);
+wrap.addEventListener('pointermove',e=>{if(crystalHolds.has(e.pointerId)){crystalHolds.move(e.pointerId,e.clientX,e.clientY);e.stopImmediatePropagation();}},true);
+wrap.addEventListener('pointerup',e=>{if(crystalHolds.has(e.pointerId)){crystalHolds.end(e.pointerId);if(wrap.hasPointerCapture(e.pointerId))wrap.releasePointerCapture(e.pointerId);e.stopImmediatePropagation();return;}const p=guestPointers.get(e.pointerId);guestPointers.delete(e.pointerId);if(p&&Math.hypot(p.x-e.clientX,p.y-e.clientY)<6&&previewDay===null)guest?.interact(sceneRay(e));},true);
+for(const name of ['pointercancel','lostpointercapture'])wrap.addEventListener(name,e=>{crystalHolds.end(e.pointerId);guestPointers.delete(e.pointerId);});
 window.addEventListener('focus',()=>localLighting?.update(new Date(),true));
 window.addEventListener('pageshow',()=>localLighting?.update(new Date(),true));
-document.addEventListener('visibilitychange',()=>{if(document.hidden){guest?.resetTaps();clearTimeout(legacyEyeTimer);}else localLighting?.update(new Date(),true);});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){crystalHolds.clear();guest?.resetTaps();clearTimeout(legacyEyeTimer);}else localLighting?.update(new Date(),true);});
 let lastFrame=0,lastTime=0;
 function frame(ms){requestAnimationFrame(frame);if(document.hidden){lastTime=ms;return;}if(ms-lastFrame<1000/30)return;const dt=Math.min(.08,(ms-lastTime)/1000||0);lastTime=ms;lastFrame=ms;now+=dt;
- localLighting?.update();localLighting?.animate(now);
- guest?.update();
- crystal?.update(now,{eligible:previewDay===null&&canGlow(save),darkness:nightAmount()});
+ const visualDate=new Date();if(reviewHour!==null)visualDate.setHours(reviewHour,0,0,0);
+ weather?.update(now,visualDate);localLighting?.update(visualDate);localLighting?.animate(now);
+ crystalHolds.update();guest?.update();
+ crystal?.update(performance.now()/1000,{eligible:(previewDay===null||crystalReview)&&canGlow(crystalInputSave()),darkness:nightAmount(visualDate)});
  const wt=now-waterAt,st=now-shakeAt,et=now-easterAt,freeze=et>=0&&et<.5;
  if(now>nextBlink){blinkAt=now;nextBlink=now+4+Math.random()*5;}
  const bt=now-blinkAt;let blink=bt<.2?1-.94*Math.sin(Math.PI*bt/.2):1;
@@ -196,5 +203,5 @@ function frame(ms){requestAnimationFrame(frame);if(document.hidden){lastTime=ms;
  mini.visible=et>=.5&&et<3.9&&!guest?.root.visible;if(mini.visible){const t=(et-.5)/3.4;mini.position.set(easterVariant===0?-1.65+t*3.3:1.12,-.06+Math.abs(Math.sin(t*Math.PI*4))*.12,-.35);mini.rotation.y=Math.sin(t*8)*.2;if(easterVariant===1)mini.scale.setScalar(.24*Math.sin(Math.PI*t)**.25);else mini.scale.setScalar(.24);}
  const cameraEase=1-Math.exp(-18*dt);smoothPan.x+=(pan.x-smoothPan.x)*cameraEase;smoothPan.y+=(pan.y-smoothPan.y)*cameraEase;const distance=Math.max(11.8,5.2/camera.aspect),yaw=.021+smoothPan.x,pitch=.106+smoothPan.y;camera.position.set(Math.sin(yaw)*distance*Math.cos(pitch),2.15+Math.sin(pitch)*distance,Math.cos(yaw)*distance*Math.cos(pitch));camera.lookAt(0,2.15,0);renderer.render(scene,camera);targets();
 }
-if(new URLSearchParams(location.search).has('test'))window.__wobble={getState:()=>structuredClone(save),getMusic:()=>music.getState(),getGuest:()=>guest?.getState(),getGuestScreen:(index=0)=>{const p=guest?.getPositions()[index];if(!p)return null;p.project(camera);const r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};},getLighting:()=>localLighting?.getState(),getCrystal:()=>crystal?.getState(),getCrystalScreen:(index=0)=>{const p=(crystal.getTapPositions()[index]||crystal.getTapPosition()).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};},getPlant:()=>plantRoot?.name,getGrowth:()=>({stage:plantRoot?.userData.growthStage,leafCount:plantRoot?.userData.leafCount,previewDay}),previewGrowth,closePreview,exportArtwork:()=>{const current=save.selectedPlant||selected;for(const p of PLANTS)swapPlant(p.id);swapPlant(current);scene.updateMatrixWorld(true);const meshes=[];for(const root of [actor,env])root.traverse(o=>{if(!o.isMesh||o.material.isShaderMaterial)return;let group='Room',parent=o;if(root===actor){group='Wobble';while(parent&&parent!==actor){if(parent.name==='PothosSeedling')group='pothos';if(parent.name.startsWith('Plant_'))group=parent.name.slice(6);parent=parent.parent;}}const g=o.geometry,m=o.material;meshes.push({name:o.name||'Mesh',group,vertices:Array.from(g.attributes.position.array),indices:g.index?Array.from(g.index.array):null,matrix:o.matrixWorld.toArray(),color:m.color?.toArray()||[.5,.5,.5],roughness:m.roughness??.8});});return {selected:current,meshes};},getCamera:()=>camera?.position.toArray(),getOrbit:()=>({...smoothPan}),getTap:()=>({...tap}),tapEye,water:doWater,shake,getReady:()=>ready,getEffects:()=>({waterRepeat,easterActive:now-easterAt<4,shakeActive:now-shakeAt<1.5}),getPerformance:()=>({drawCalls:renderer?.info.render.calls,triangles:renderer?.info.render.triangles}),motion};
+if(new URLSearchParams(location.search).has('test'))window.__wobble={getState:()=>structuredClone(save),getMusic:()=>music.getState(),getGuest:()=>guest?.getState(),getGuestScreen:(index=0)=>{const p=guest?.getPositions()[index];if(!p)return null;p.project(camera);const r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};},setReviewHour:h=>{reviewHour=h===null?null:Math.max(0,Math.min(23,Number(h)||0));},getWeather:()=>weather?.getState(),setWeatherPreview:v=>weather?.setPreview(v),getLighting:()=>localLighting?.getState(),setCrystalMode:m=>crystal?.setMode(m),getCrystalHolds:()=>crystalHolds.getState(),getCrystal:()=>crystal?.getState(),getCrystalScreen:(index=0)=>{const p=(crystal.getTapPositions()[index]||crystal.getTapPosition()).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};},getPlant:()=>plantRoot?.name,getGrowth:()=>({stage:plantRoot?.userData.growthStage,leafCount:plantRoot?.userData.leafCount,previewDay}),previewGrowth,closePreview,exportArtwork:()=>{const current=save.selectedPlant||selected;for(const p of PLANTS)swapPlant(p.id);swapPlant(current);scene.updateMatrixWorld(true);const meshes=[];for(const root of [actor,env])root.traverse(o=>{if(!o.isMesh||o.material.isShaderMaterial)return;let group='Room',parent=o;if(root===actor){group='Wobble';while(parent&&parent!==actor){if(parent.name==='PothosSeedling')group='pothos';if(parent.name.startsWith('Plant_'))group=parent.name.slice(6);parent=parent.parent;}}const g=o.geometry,m=o.material;meshes.push({name:o.name||'Mesh',group,vertices:Array.from(g.attributes.position.array),indices:g.index?Array.from(g.index.array):null,matrix:o.matrixWorld.toArray(),color:m.color?.toArray()||[.5,.5,.5],roughness:m.roughness??.8});});return {selected:current,meshes};},getCamera:()=>camera?.position.toArray(),getOrbit:()=>({...smoothPan}),getTap:()=>({...tap}),tapEye,water:doWater,shake,getReady:()=>ready,getEffects:()=>({waterRepeat,easterActive:now-easterAt<4,shakeActive:now-shakeAt<1.5}),getPerformance:()=>({drawCalls:renderer?.info.render.calls,triangles:renderer?.info.render.triangles}),motion};
 boot();

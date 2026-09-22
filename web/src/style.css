@@ -21,3 +21,12 @@
 .home-friend img{position:absolute;width:217.641%;max-width:none;height:auto;left:-54.729%;top:-71.769%}
 @media(max-width:370px){.home-greeting{gap:10px}.home-greeting h2{font-size:29px}.home-friend{flex-basis:82px}}
 @media(max-height:740px){.home-brand{width:125px;margin-bottom:18px;padding:8px 11px}.home-greeting h2{font-size:29px}.home-friend{flex-basis:82px}}
+
+/* More legible headings, retaining Aileron and the existing layout. */
+.corner-name h1{font-size:16px;font-weight:700}
+.welcome h2{font-weight:700}
+.home-greeting h2{font-size:37px}
+.plant-detail h3{font-size:27px;font-weight:700}
+dialog h2{font-size:26px;font-weight:700}
+.growth-preview h2{font-size:24px;font-weight:700}
+@media(max-width:370px),(max-height:740px){.home-greeting h2{font-size:32px}.growth-preview h2{font-size:21px}}

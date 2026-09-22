@@ -39,10 +39,10 @@ export function createLeafShadows(scene,{reducedMotion=false}={}){
 // Stars and a sphere-lit lunar disc are composited on the photographic plate.
 // Color-keyed sky occlusion keeps every star behind the existing leaves.
 export function installExteriorAtmosphere(plate){
- const U={outdoorGain:{value:1},gradeTop:{value:new T.Color()},gradeBottom:{value:new T.Color()},contrast:{value:1},desaturate:{value:0},nightLevel:{value:0},skyTop:{value:new T.Color()},skyBottom:{value:new T.Color()},moonLight:{value:new T.Vector3()},moonIllumination:{value:0}};
+ const U={weatherAmount:{value:0},outdoorGain:{value:1},gradeTop:{value:new T.Color()},gradeBottom:{value:new T.Color()},contrast:{value:1},desaturate:{value:0},nightLevel:{value:0},skyTop:{value:new T.Color()},skyBottom:{value:new T.Color()},moonLight:{value:new T.Vector3()},moonIllumination:{value:0}};
  plate.material.onBeforeCompile=shader=>{
   Object.assign(shader.uniforms,U);
-  shader.fragmentShader=`uniform float outdoorGain, contrast, desaturate, nightLevel, moonIllumination;
+  shader.fragmentShader=`uniform float weatherAmount, outdoorGain, contrast, desaturate, nightLevel, moonIllumination;
    uniform vec3 gradeTop, gradeBottom, skyTop, skyBottom, moonLight;
    float skyHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
    float starLayer(vec2 uv,float scale){
@@ -68,7 +68,7 @@ export function installExteriorAtmosphere(plate){
    vec2 q=(uv-vec2(.555,.61))*vec2(1.777,1.)/.018;
    float r=length(q),edge=max(fwidth(r),.015);
    float disc=1.-smoothstep(1.-edge,1.+edge,r);
-   float stars=(starLayer(uv,58.)+starLayer(uv+vec2(.137,.271),93.)*.45)*smoothstep(.35,1.,nightLevel);
+   float stars=(starLayer(uv,58.)+starLayer(uv+vec2(.137,.271),93.)*.45)*smoothstep(.35,1.,nightLevel)*(1.-weatherAmount*.98);
    exterior+=vec3(.72,.80,1.)*stars*skyMask*(1.-clouds*.85)*(1.-disc);
    // True circular disc in the image's aspect ratio, never an oval texture.
    vec3 normal=vec3(q,sqrt(max(0.,1.-dot(q,q))));
@@ -76,9 +76,18 @@ export function installExteriorAtmosphere(plate){
    float lit=smoothstep(-.025,.035,light);
    float textureShade=.94+.025*sin(q.x*19.+sin(q.y*14.))+.035*sin(q.y*7.+q.x*5.);
    vec3 moon=vec3(.83,.85,.79)*textureShade*(.45+.55*max(light,0.));
-   float moonVisibility=smoothstep(.1,.7,nightLevel);
+   float moonVisibility=smoothstep(.1,.7,nightLevel)*(1.-weatherAmount*.97);
    exterior=mix(exterior,moon,disc*lit*moonVisibility*skyMask);
    exterior+=vec3(.04,.055,.08)*exp(-max(0.,r-1.)*3.5)*(1.-disc)*moonIllumination*moonVisibility*skyMask;
+   // Weather grading remains outside: retain the seasonal image and its silhouettes.
+   float distant=exp(-pow((uv.y-.43)/.22,2.));
+   vec3 wetTint=mix(vec3(1.),vec3(.91,.97,1.03),weatherAmount);
+   exterior*=wetTint;
+   float haze=weatherAmount*(.035+.13*distant);
+   vec3 rainSky=mix(vec3(.30,.35,.38),nightSky,nightLevel);
+   exterior=mix(exterior,rainSky,haze);
+   // Clouds veil moon/stars in wet weather, without adding city lights.
+   exterior=mix(exterior,exterior*.82,skyMask*weatherAmount*.55);
    diffuseColor.rgb=exterior;
   `);
  };
