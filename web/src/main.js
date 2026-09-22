@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {createGardenMusic} from './garden-music.js';
 import {createGuest9978} from './guest-9978.js';
+import {ALTERNATING_GAP_MS} from './guest-state.js';
 import {GLTFLoader} from '../vendor/GLTFLoader.js';
 import {SAVE_KEY,dayKey,loadStorage,persist,isLocked,eyeSequence} from './state.js';
 import {createLocalLighting} from './local-lighting.js';
@@ -86,7 +87,7 @@ let legacyEyeTimer;
 function tapEye(side){
  if(!ready||blocked||!save?.selectedPlant||previewDay!==null||!$('welcome').hidden||$('details').open)return;
  clearTimeout(legacyEyeTimer);guest?.tap(side);tap={side,at:now};sequence=eyeSequence(sequence,side,performance.now());
- if(sequence.triggered)legacyEyeTimer=setTimeout(()=>{if(now-easterAt>5&&!guest?.getState().active&&!guest?.getState().pending&&guest?.getState().taps<8&&$('welcome').hidden&&previewDay===null&&!$('details').open){easterAt=now;easterVariant=Math.random()<.5?0:1;}},1400);
+ if(sequence.triggered)legacyEyeTimer=setTimeout(()=>{if(now-easterAt>5&&!guest?.getState().active&&!guest?.getState().pending&&guest?.getState().taps<8&&$('welcome').hidden&&previewDay===null&&!$('details').open){easterAt=now;easterVariant=Math.random()<.5?0:1;}},ALTERNATING_GAP_MS+100);
 }
 $('eye-left').addEventListener('click',()=>tapEye('Left'));$('eye-right').addEventListener('click',()=>tapEye('Right'));
 function shake(){if(!ready||!save?.selectedPlant||now-lastShake<1.4)return;shakeAt=now;lastShake=now;message('Oh. A little dizzy.');}
@@ -137,7 +138,22 @@ async function boot(){
  }catch(err){console.error(err);$('loading').innerHTML='Could not open your garden. <button id="retry">Try again</button>';$('retry').onclick=()=>location.reload();}
 }
 function resize(){if(!renderer)return;const r=wrap.getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
-function targets(){if(!actor)return;eyes.forEach(({rig},i)=>{const p=rig.getWorldPosition(new THREE.Vector3()).project(camera);const b=$(i?'eye-right':'eye-left');b.style.left=`${(p.x*.5+.5)*wrap.clientWidth}px`;b.style.top=`${(-p.y*.5+.5)*wrap.clientHeight}px`;});}
+const eyeBounds=new THREE.Box3(),eyeCorner=new THREE.Vector3();
+function targets(){
+ if(!actor)return;
+ eyes.forEach(({rig,white},i)=>{
+  const p=rig.getWorldPosition(eyeCorner).project(camera),button=$(i?'eye-right':'eye-left');
+  button.style.left=`${(p.x*.5+.5)*wrap.clientWidth}px`;button.style.top=`${(-p.y*.5+.5)*wrap.clientHeight}px`;
+  eyeBounds.setFromObject(white);let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  for(let n=0;n<8;n++){
+   eyeCorner.set(n&1?eyeBounds.max.x:eyeBounds.min.x,n&2?eyeBounds.max.y:eyeBounds.min.y,n&4?eyeBounds.max.z:eyeBounds.min.z).project(camera);
+   minX=Math.min(minX,eyeCorner.x);maxX=Math.max(maxX,eyeCorner.x);minY=Math.min(minY,eyeCorner.y);maxY=Math.max(maxY,eyeCorner.y);
+  }
+  button.style.width=Math.max(44,(maxX-minX)*wrap.clientWidth*.5+4)+'px';
+  button.style.height=Math.max(44,(maxY-minY)*wrap.clientHeight*.5+4)+'px';
+ });
+}
+
 let pan={x:0,y:0},smoothPan={x:0,y:0};
 installCameraDrag(wrap,{enabled:()=>ready&&!blocked&&$('welcome').hidden&&!$('details').open,onChange:p=>{pan=p;},onFirstDrag:()=>message('A little look around.')});
 let crystalPointer=null;

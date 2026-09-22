@@ -14,17 +14,18 @@ export function createGuestState(storage,config=ENCOUNTERS.saturn){
  read();
  return {state,resetTaps(){taps=0;lastTap=-Infinity;},tap(time){const s=state(time);if(s.active||time<until)return false;if(time-lastTap>650)taps=0;lastTap=time;return ++taps>=8;},start(time){const s=state(time);if(s.active||time<until){taps=0;return false;}started=time;until=time+total+config.cooldown;taps=0;try{storage?.setItem(config.key,String(until));}catch{}return true;}};
 }
+export const ALTERNATING_GAP_MS=3000;
 // A pause resolves the 8-tap burst so the first eight of twenty do not summon Saturn.
 export function createEyeGesture(){
  let rapid=0,alternating=0,last=-Infinity,due=Infinity,pending=null;
  function reset(){rapid=alternating=0;last=-Infinity;due=Infinity;pending=null;}
  return {reset,tap(side,time){
-  const gap=time-last;if(gap>1200)alternating=0;if(gap>650)rapid=0;
+  const gap=time-last;if(gap>ALTERNATING_GAP_MS)alternating=0;if(gap>650)rapid=0;
   rapid++;const expected=alternating%2===0?'Left':'Right';alternating=side===expected?alternating+1:side==='Left'?1:0;
   last=time;
   if(alternating===20){reset();return 'friends';}
-  if(rapid>=8){pending='saturn';due=time+(alternating>=8?1200:700);}
-  else if(pending){due=time+1200;}
+  if(rapid>=8){pending='saturn';due=time+(alternating>=8?ALTERNATING_GAP_MS:700);}
+  else if(pending){due=time+ALTERNATING_GAP_MS;}
   return null;
- },poll(time){if(pending&&time>=due){const result=pending;reset();return result;}if(time-last>1200)reset();return null;},getState:()=>({rapid,alternating})};
+ },poll(time){if(pending&&time>=due){const result=pending;reset();return result;}if(time-last>ALTERNATING_GAP_MS)reset();return null;},getState:()=>({rapid,alternating})};
 }
