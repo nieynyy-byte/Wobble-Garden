@@ -3,6 +3,14 @@ import * as T from 'three';
 // It is deliberately separate from glass/frame, allowing natural orbit parallax.
 export function outdoorGarden(texture){
  const plane=new T.Mesh(new T.PlaneGeometry(36,36*941/1672),new T.MeshBasicMaterial({map:texture,toneMapped:false,color:'#e4e5d9'}));
+ // Portrait retains the reviewed crop. Wider viewports can see the far-right
+ // window pane, so extend the plate uniformly before drawing. The fit depends
+ // only on aspect, not orbit, to avoid a background that slides while dragging.
+ plane.onBeforeRender=(_renderer,_scene,camera)=>{
+  const width=Math.min(60,36+26*Math.max(0,camera.aspect-1.25));
+  plane.scale.setScalar(width/36);plane.updateMatrixWorld();
+ };
+ plane.frustumCulled=false;
  plane.position.set(.5,4.5,-18);plane.name='Distant garden photographic plate';plane.userData.noShadow=true;return plane;
 }
 export async function loadEnvironmentTextures(){
