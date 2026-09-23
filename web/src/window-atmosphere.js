@@ -76,10 +76,13 @@ export function installExteriorAtmosphere(plate){
    vec3 exterior=pow(max(graded,vec3(0.)),vec3(contrast))*outdoorGain*atmosphere;
    float blueSky=smoothstep(-.02,.02,original.b-original.r)*smoothstep(-.045,-.005,original.b-original.g);
    float clouds=smoothstep(.18,.34,min(original.r,min(original.g,original.b)))*smoothstep(-.015,.02,original.b-original.r);
-   float skyMask=max(blueSky,clouds)*smoothstep(.46,.56,uv.y);
+   float green=max(original.g-original.b,original.g-original.r);
+   float skyMask=(1.-smoothstep(.012,.10,green))*smoothstep(.05,.22,lum)*smoothstep(.46,.58,uv.y);
    vec3 nightSky=mix(skyBottom,skyTop,smoothstep(.4,.94,uv.y));
    float dark=smoothstep(0.,.85,nightLevel);
-   exterior=mix(exterior,nightSky,skyMask*dark);
+   // Preserve soft cloud texture without hard color-key islands.
+   vec3 softSky=nightSky*(.88+.12*smoothstep(.12,.8,lum));
+   exterior=mix(exterior,softSky,skyMask*dark);
    vec2 q=(uv-vec2(.555,.61))*vec2(1.777,1.)/.018;
    float r=length(q),edge=max(fwidth(r),.015);
    float disc=1.-smoothstep(1.-edge,1.+edge,r);

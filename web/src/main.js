@@ -136,6 +136,7 @@ async function boot(){
  const waterMat=new THREE.MeshPhysicalMaterial({color:'#97bfd0',transparent:true,opacity:.72,roughness:.2});
  for(let i=0;i<20;i++){const d=new THREE.Mesh(new THREE.SphereGeometry(.035,8,6),waterMat);d.scale.y=1.7;d.visible=false;scene.add(d);drops.push(d);}
  for(let i=0;i<3;i++){const r=new THREE.Mesh(new THREE.TorusGeometry(.1,.009,5,32),new THREE.MeshBasicMaterial({color:'#9cbcd0',transparent:true,opacity:.5}));r.rotation.x=-Math.PI/2;r.position.y=1.58;r.visible=false;scene.add(r);ripples.push(r);}
+ await weather.ready;weather.update(0,new Date());localLighting.update(new Date(),true);
  new ResizeObserver(resize).observe(wrap);resize();ready=true;$('loading').hidden=true;$('loading').style.display='none';$('water').disabled=!save.selectedPlant;eyes.forEach((_,i)=>$(i?'eye-right':'eye-left').disabled=!save.selectedPlant);if(launchPreview)previewGrowth(new URLSearchParams(location.search).get('day')||0);else if(save.selectedPlant&&save.plantName)enterGarden();else home();if(loaded.status==='migrated'&&!launchPreview)persistSave();updateCare();if(save.selectedPlant&&$('welcome').hidden&&previewDay===null)message('Drag gently to look around.');
  requestAnimationFrame(frame);
  }catch(err){console.error(err);$('loading').innerHTML='Could not open your garden. <button id="retry">Try again</button>';$('retry').onclick=()=>location.reload();}

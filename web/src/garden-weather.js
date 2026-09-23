@@ -20,7 +20,8 @@ export function createGardenWeather({scene,room,lighting,storage,music,reducedMo
  const silence=()=>audio.set(rain.getState().amount,music.getState().muted,document.hidden);
  document.addEventListener('visibilitychange',silence);window.addEventListener('pagehide',()=>audio.set(0,true,true));
  live.start();
- return {
+ const ready=seasonUpdate(new Date());
+ return {ready,
   update(seconds,date=new Date()){
    seasonUpdate(date);live.tick();const state=live.getState(),level=override?.rain||state.level;
    const amount=rain.update(seconds,RAIN_LEVELS[level]??0,lighting.getState()?.night||0);

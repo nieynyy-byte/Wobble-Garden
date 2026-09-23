@@ -15,9 +15,9 @@ export function createTraveler(model,{index=0,count=1,potHeight=2,potWidth=2,red
  const laneX=2.0+index*1.25;
  // Begin in the visible sky band beneath the transom, in front of the photo.
  // A shared distant origin with small lane offsets reads as a traveling group.
- const skyX=.65+index*.55+entry*.12,skyY=6.25+index*.18;
+ const skyX=.30+index*.45+entry*.08,skyY=6.7+index*.08;
  const cruise=Math.max(3.7,(obstacle?.max.y||3)+radius+.35);
- const arrival=curve([[skyX,skyY,-15.5],[skyX-.2,skyY-.15,-11],[.25+index*.4,Math.max(4.35,cruise),-4.0],[anchor.x*.6,cruise,front],[anchor.x+.18,anchor.y+.45,front+.15],anchor.toArray()]);
+ const arrival=curve([[skyX,skyY,-15.5],[skyX+.35,5.8+index*.12,-10],[.45+index*.2,Math.max(4.0,cruise),-4.0],[anchor.x*.6,cruise,front],[anchor.x+.18,anchor.y+.45,front+.15],anchor.toArray()]);
  let departure,departFrom,detour=null,detourAt=0,detourDuration=3,interactions=0,lastTap=-Infinity,kick=0;
  const eyes=[],rings=[];model.traverse(o=>{if(!o.isMesh)return;o.castShadow=false;o.receiveShadow=true;if(/Pupil|EyeWhite/.test(o.name))eyes.push({o,p:o.position.clone(),s:o.scale.clone(),pupil:/Pupil/.test(o.name),radius:(o.geometry.boundingSphere||(o.geometry.computeBoundingSphere(),o.geometry.boundingSphere)).radius});if(/ring|orbital/i.test(o.name))rings.push({o,r:o.rotation.clone()});});
  const previous=new T.Vector3(),look=new T.Vector3();let initialized=false,lookAtPlayer=false;

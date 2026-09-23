@@ -26,13 +26,18 @@ export function createCrystal({reducedMotion=false,renderer}={}){
     const name=named.name,index=Number(name.match(/(\d+)$/)?.[1]||0),stage=name.includes('Crown')?0:name.includes('Satellite')?Math.min(3,1+Math.floor(index/3)):Math.min(3,Math.floor(index/5));
     const geo=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();geo.applyMatrix4(o.matrixWorld);geo.translate(-origin.x,-origin.y,-origin.z);const color=o.material.color.clone().lerp(new T.Color(1,1,1),.07);geo.setAttribute('color',new T.Float32BufferAttribute(Array.from({length:geo.attributes.position.count},()=>color.toArray()).flat(),3));for(const key of Object.keys(geo.attributes))if(!['position','normal','color'].includes(key))geo.deleteAttribute(key);buckets[stage].push(geo);
    });
-   const material=new T.MeshPhysicalMaterial({color:0xffffff,vertexColors:true,flatShading:true,roughness:.13,metalness:0,transmission:.38,thickness:1.15,ior:1.5,clearcoat:1,clearcoatRoughness:.055,envMap:reflections.texture,envMapIntensity:1.7,attenuationColor:new T.Color(COLORS[id]).lerp(new T.Color(1,1,1),.28),attenuationDistance:1.1,emissive:COLORS[id],emissiveIntensity:.008});
+   const material=new T.MeshPhysicalMaterial({color:0xffffff,vertexColors:true,flatShading:true,roughness:.055,metalness:0,transmission:.38,thickness:1.15,ior:1.62,clearcoat:1,clearcoatRoughness:.055,envMap:reflections.texture,envMapIntensity:1.7,attenuationColor:new T.Color(COLORS[id]).lerp(new T.Color(1,1,1),.28),attenuationDistance:2.0,emissive:COLORS[id],emissiveIntensity:.008});
    const meshes=buckets.map((list,i)=>{const geometry=mergeGeometries(list);list.forEach(g=>g.dispose());const m=new T.Mesh(geometry,material);m.name=id+'_growth_'+i;m.userData.crystalId=id;m.castShadow=false;m.receiveShadow=true;group.add(m);return m;});
    const sourceCore=g.scene.getObjectByName(id+'_Core'),coreGeometry=sourceCore.geometry.clone();coreGeometry.applyMatrix4(sourceCore.matrixWorld);coreGeometry.translate(-origin.x,-origin.y,-origin.z);coreGeometry.scale(.62,.78,.62);
-   const coreMaterial=new T.MeshPhysicalMaterial({color:COLORS[id],roughness:.28,emissive:COLORS[id],emissiveIntensity:.45,envMap:reflections.texture,envMapIntensity:.2});
-   const core=new T.Mesh(coreGeometry,coreMaterial);core.name=id+'_LuminousHeart';group.add(core);
+   // Faceted internal heart catches distinct bright/dark planes instead of a flat glow.
+   coreGeometry.computeBoundingBox();const cb=new T.Box3().setFromObject(crown).translate(origin.clone().negate()),cs=cb.getSize(new T.Vector3()),cc=cb.getCenter(new T.Vector3());
+   const cuts=[];for(let k=0;k<3;k++){const cut=new T.OctahedronGeometry(1,0);cut.rotateY(.35+k*.8);cut.scale(cs.x*(.18+k*.015),cs.y*(.38-k*.04),cs.z*.24);cut.translate(cc.x+(k-1)*cs.x*.10,cc.y+(k-1)*cs.y*.035,cc.z);cuts.push(cut);}
+   const cutHeart=mergeGeometries(cuts);cuts.forEach(g=>g.dispose());coreGeometry.dispose();
+   const coreMaterial=new T.MeshPhysicalMaterial({color:new T.Color(COLORS[id]).lerp(new T.Color('white'),.6),roughness:.07,metalness:.12,flatShading:true,emissive:COLORS[id],emissiveIntensity:.8,envMap:reflections.texture,envMapIntensity:2.4});
+   const core=new T.Mesh(cutHeart,coreMaterial);core.name=id+'_LuminousHeart';group.add(core);
    const halo=new T.Sprite(new T.SpriteMaterial({map,color:COLORS[id],transparent:true,opacity:.07,depthWrite:false,blending:T.AdditiveBlending}));halo.position.y=.5;halo.scale.set(1.4,1.8,1);group.add(halo);
-   clusters.push({id,root:group,position:new T.Vector3(origin.x,-.045,origin.z),meshes,material,core,halo,at:-Infinity,pulse:0});
+   const spill=FREE_CRYSTALS.includes(id)?new T.PointLight(COLORS[id],0,3.5,2):null;if(spill){spill.position.set(0,.65,.2);group.add(spill);}
+   clusters.push({id,spill,root:group,position:new T.Vector3(origin.x,-.045,origin.z),meshes,material,core,halo,at:-Infinity,pulse:0});
   }
   g.scene.traverse(o=>{if(o.isMesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});
   // Seats are a separate Day-45 layer. Fit their depth to the actual tabletop;
@@ -48,7 +53,7 @@ export function createCrystal({reducedMotion=false,renderer}={}){
   seats.traverse(o=>{if(o.isMesh){o.castShadow=false;o.receiveShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material])if(m.emissiveIntensity>.5)m.emissiveIntensity=.18;}});root.add(seats);setDays(days);
  })();
  function trigger(id,save,time,date=new Date()){if(!canGlow(save,date))return false;const c=clusters.find(c=>c.id===id&&c.root.visible);if(!c)return false;c.at=time;return true;}
- function update(time,{eligible=true,darkness=nightAmount()}={}){for(const c of clusters){if(!eligible)c.at=-Infinity;c.pulse=crystalPulse(time-c.at);c.material.emissiveIntensity=.006+darkness*.009+c.pulse*.255;c.material.envMapIntensity=1.7*(1-darkness)+.045*darkness;c.core.material.emissiveIntensity=.45+darkness*.4+c.pulse*12;c.core.material.envMapIntensity=.2*(1-darkness);c.halo.material.opacity=.012+darkness*.023+c.pulse*.72;}}
+ function update(time,{eligible=true,darkness=nightAmount()}={}){for(const c of clusters){if(!eligible)c.at=-Infinity;c.pulse=crystalPulse(time-c.at);if(c.spill)c.spill.intensity=.12+darkness*.65+c.pulse*4.5;c.material.emissiveIntensity=.006+darkness*.035+c.pulse*.45;c.material.transmission=.65+darkness*.22;c.material.envMapIntensity=1.7*(1-darkness)+1.1*darkness;c.core.material.emissiveIntensity=.45+darkness*.75+c.pulse*22;c.core.material.envMapIntensity=2.4;c.halo.material.opacity=.012+darkness*.10+c.pulse*.85;}}
  const visible=()=>clusters.filter(c=>c.root.visible);
  return {root,ready,setDays,setMode(value){mode=value==='free'?'free':'full';setDays(days);},trigger,update,
   targets:()=>visible().flatMap(c=>c.meshes.filter(m=>m.visible)),getTapPositions:()=>visible().map(c=>c.root.localToWorld(new T.Vector3(0,.55,0))),getTapPosition:()=>visible()[0]?.root.localToWorld(new T.Vector3(0,.55,0))||new T.Vector3(),

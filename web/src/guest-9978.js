@@ -3,7 +3,7 @@ import {GLTFLoader} from '../vendor/GLTFLoader.js';
 import {createGuestState,createEyeGesture,ENCOUNTERS} from './guest-state.js';
 import {createTraveler,separateTravelers} from './guest-flight.js';
 import {createVisitorSound} from './visitor-sound.js';
-export const VISITOR_ASSETS={saturn:['logo-friends-v02/img-9978.glb'],friends:['logo-friends-v04/img-9941.glb','logo-friends-v05/img-9960.glb','logo-friends-v05/img-9972.glb']};
+export const VISITOR_ASSETS={saturn:['logo-friends-v02/img-9978.glb'],friends:['logo-friends-v04/img-9941.glb','logo-friends-v05/img-9960.glb','logo-friends-v04/img-9990.glb']};
 export function createGuest9978({scene,actor,camera,storage,reducedMotion=false,eligible=()=>true,onStart=()=>{},muted=()=>false}){
  const sound=createVisitorSound({muted});let priorPhase='',lastSound=0,obstacleBox=null;
  const states=Object.fromEntries(Object.entries(ENCOUNTERS).map(([k,v])=>[k,createGuestState(storage,v)]));
