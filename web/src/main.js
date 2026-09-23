@@ -188,13 +188,20 @@ function frame(ms){requestAnimationFrame(frame);if(document.hidden){lastTime=ms;
  if(now>nextBlink){blinkAt=now;nextBlink=now+4+Math.random()*5;}
  const bt=now-blinkAt;let blink=bt<.2?1-.94*Math.sin(Math.PI*bt/.2):1;
  if(freeze)blink=1;
- for(const {side,rig,pupil} of eyes){const b=base.get(rig),p=base.get(pupil);rig.scale.copy(b.s);rig.scale.y*=blink;pupil.position.copy(p.p);rig.rotation.copy(b.r);
+ for(const {side,rig,pupil,white} of eyes){const b=base.get(rig),p=base.get(pupil);rig.scale.copy(b.s);rig.scale.y*=blink;pupil.position.copy(p.p);rig.rotation.copy(b.r);
  if(!freeze){
   const idle=reduced?0:Math.sin(now*.37)*.014;pupil.position.x+=idle;const look=guest?.gaze();if(look){pupil.position.x+=look.x;pupil.position.y+=look.y;if(look.player){pupil.position.x=p.p.x;pupil.position.y=p.p.y;}}
   if(wt<2.2){pupil.position.y+=.045;if(waterRepeat>=3){pupil.position.x+=(side==='Left'?.065:-.065);rig.rotation.z=(side==='Left'?1:-1)*.1*Math.sin(wt*7);}else if(waterRepeat===2)pupil.position.x+=.035;}
   if(now-tap.at<.55&&tap.side===side&&!guest?.root.visible){const a=Math.sin((now-tap.at)/.55*Math.PI);rig.scale.multiplyScalar(1+a*.1);pupil.position.x+=a*.045;}
   if(st<1.5){const a=(1-st/1.5)*.065;pupil.position.x+=Math.cos(st*19)*a;pupil.position.y+=Math.sin(st*19)*a;}
  }
+ const dx=pupil.position.x-p.p.x,dy=pupil.position.y-p.p.y,length=Math.hypot(dx,dy);
+ if(length>.06){pupil.position.x=p.p.x+dx*.06/length;pupil.position.y=p.p.y+dy*.06/length;}
+ rig.updateWorldMatrix(true,true);
+ const origin=rig.localToWorld(new THREE.Vector3(pupil.position.x,pupil.position.y,1));
+ const direction=new THREE.Vector3(0,0,-1).transformDirection(rig.matrixWorld);
+ const surface=new THREE.Raycaster(origin,direction).intersectObject(white,false)[0];
+ if(surface){const local=rig.worldToLocal(surface.point);if(!pupil.geometry.boundingBox)pupil.geometry.computeBoundingBox();pupil.position.z=local.z-pupil.geometry.boundingBox.min.z*pupil.scale.z+.004;}
  }
  leaves.forEach((o,i)=>{const b=base.get(o);o.rotation.copy(b.r);if(!freeze){const wind=reduced?0:.021*(o.userData.stiffness??1)*(.55+.45*Math.sin(now*.17)**2);o.rotation.x+=wind*Math.sin(now*(.63+i*.07)+i*1.9)+wind*.35*Math.sin(now*.29+i);o.rotation.z+=wind*.5*Math.sin(now*.55+i*.8);if(wt<2.2)o.rotation.x+=.045*(o.userData.stiffness??1)*Math.sin(wt*11+i)*Math.exp(-wt*2);if(st<1.5)o.rotation.x+=.05*(o.userData.stiffness??1)*Math.sin(st*9+i)*(1-st/1.5);}});
  stems.forEach((o,i)=>{o.rotation.z=base.get(o).r.z+(reduced?0:.004*Math.sin(now*.7+i));});

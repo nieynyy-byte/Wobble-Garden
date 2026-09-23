@@ -5,15 +5,15 @@ const curve=points=>new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p)),fa
 export function createTraveler(model,{index=0,count=1,potHeight=2,potWidth=2,reducedMotion=false,entry=0,obstacle=null}={}){
  const root=new T.Group();root.add(model);
  const box=new T.Box3().setFromObject(model),size=box.getSize(new T.Vector3());
- model.scale.setScalar(Math.min(potHeight*(count===1?.43:.41)/size.y,potWidth*(count===1?.48:.45)/size.x));
+ model.scale.setScalar(Math.min(potHeight*(count===1?.43:.53)/size.y,potWidth*(count===1?.48:.58)/size.x));
  const center=new T.Box3().setFromObject(model).getCenter(new T.Vector3());model.position.sub(center);
  const scaledBox=new T.Box3().setFromObject(model),extent=scaledBox.getSize(new T.Vector3());
  const radius=extent.length()*.5+.08;
  const front=Math.max(2.0,(obstacle?.max.z||1)+radius+.38);
- const anchor=new T.Vector3(count===1?.95:[-.92,.92,0][index],count===1?2.25:[2.25,3.05,4.15][index],front+index*.10);
+ const anchor=new T.Vector3(count===1?.65:[-.62,.62,0][index],count===1?2.25:[extent.y*.5+.10,extent.y*.5+.15,2.55][index],front+index*.10);
  const safeY=Math.max(4.6,(obstacle?.max.y||3)+radius+.55);
  const laneX=2.0+index*1.25;
- const arrival=curve([[6+index*1.4+entry,8+index*.8,-16],[laneX+1,7+index*.6,-9],[laneX,safeY+.6+index*.6,-3.8],[laneX,safeY+.6+index*.6,front],[anchor.x,anchor.y+.35,front+.15],anchor.toArray()]);
+ const arrival=curve([[anchor.x+entry*.3,12+index*1.2,-10],[anchor.x+.5,9+index*.7,-5],[anchor.x+.35,safeY+2+index*.5,front],[anchor.x+.18,anchor.y+1.0,front+.2],anchor.toArray()]);
  let departure,departFrom,detour=null,detourAt=0,detourDuration=3,interactions=0,lastTap=-Infinity,kick=0;
  const eyes=[],rings=[];model.traverse(o=>{if(!o.isMesh)return;o.castShadow=false;o.receiveShadow=true;if(/Pupil|EyeWhite/.test(o.name))eyes.push({o,p:o.position.clone(),s:o.scale.clone(),pupil:/Pupil/.test(o.name),radius:(o.geometry.boundingSphere||(o.geometry.computeBoundingSphere(),o.geometry.boundingSphere)).radius});if(/ring|orbital/i.test(o.name))rings.push({o,r:o.rotation.clone()});});
  const previous=new T.Vector3(),look=new T.Vector3();let initialized=false,lookAtPlayer=false;
