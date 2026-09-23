@@ -10,7 +10,7 @@ export function createTraveler(model,{index=0,count=1,potHeight=2,potWidth=2,red
  const scaledBox=new T.Box3().setFromObject(model),extent=scaledBox.getSize(new T.Vector3());
  const radius=extent.length()*.5+.08;
  const front=Math.max(2.0,(obstacle?.max.z||1)+radius+.38);
- const anchor=new T.Vector3(count===1?.65:[-.62,.62,0][index],count===1?2.25:[extent.y*.5+.10,extent.y*.5+.15,2.55][index],front+index*.10);
+ const anchor=new T.Vector3(count===1?.65:[-.62,.62,0][index],count===1?2.25:[extent.y*.5+.10,extent.y*.5+.15,Math.max(3.2,(obstacle?.max.y||2.5)+extent.y*.5+.45)][index],front+index*.10);
  const safeY=Math.max(4.6,(obstacle?.max.y||3)+radius+.55);
  const laneX=2.0+index*1.25;
  const arrival=curve([[anchor.x+entry*.3,12+index*1.2,-10],[anchor.x+.5,9+index*.7,-5],[anchor.x+.35,safeY+2+index*.5,front],[anchor.x+.18,anchor.y+1.0,front+.2],anchor.toArray()]);
