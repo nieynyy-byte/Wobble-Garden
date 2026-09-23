@@ -13,7 +13,11 @@ export function createTraveler(model,{index=0,count=1,potHeight=2,potWidth=2,red
  const anchor=new T.Vector3(count===1?.65:[-.62,.62,0][index],count===1?2.25:[extent.y*.5+.10,extent.y*.5+.15,Math.max(3.2,(obstacle?.max.y||2.5)+extent.y*.5+.45)][index],front+index*.10);
  const safeY=Math.max(4.6,(obstacle?.max.y||3)+radius+.55);
  const laneX=2.0+index*1.25;
- const arrival=count===1?curve([[1.25+entry*.15,4.7,-15],[1.0,4.5,-10],[.45,Math.max(3.7,(obstacle?.max.y||3)+radius+.35),-3.6],[.25,Math.max(3.7,(obstacle?.max.y||3)+radius+.35),front],[anchor.x+.2,anchor.y+.5,front+.12],anchor.toArray()]):curve([[anchor.x+entry*.3,12+index*1.2,-10],[anchor.x+.5,9+index*.7,-5],[anchor.x+.35,safeY+2+index*.5,front],[anchor.x+.18,anchor.y+1.0,front+.2],anchor.toArray()]);
+ // Begin in the visible sky band beneath the transom, in front of the photo.
+ // A shared distant origin with small lane offsets reads as a traveling group.
+ const skyX=.65+index*.55+entry*.12,skyY=6.25+index*.18;
+ const cruise=Math.max(3.7,(obstacle?.max.y||3)+radius+.35);
+ const arrival=curve([[skyX,skyY,-15.5],[skyX-.2,skyY-.15,-11],[.25+index*.4,Math.max(4.35,cruise),-4.0],[anchor.x*.6,cruise,front],[anchor.x+.18,anchor.y+.45,front+.15],anchor.toArray()]);
  let departure,departFrom,detour=null,detourAt=0,detourDuration=3,interactions=0,lastTap=-Infinity,kick=0;
  const eyes=[],rings=[];model.traverse(o=>{if(!o.isMesh)return;o.castShadow=false;o.receiveShadow=true;if(/Pupil|EyeWhite/.test(o.name))eyes.push({o,p:o.position.clone(),s:o.scale.clone(),pupil:/Pupil/.test(o.name),radius:(o.geometry.boundingSphere||(o.geometry.computeBoundingSphere(),o.geometry.boundingSphere)).radius});if(/ring|orbital/i.test(o.name))rings.push({o,r:o.rotation.clone()});});
  const previous=new T.Vector3(),look=new T.Vector3();let initialized=false,lookAtPlayer=false;
@@ -34,7 +38,7 @@ export function createTraveler(model,{index=0,count=1,potHeight=2,potWidth=2,red
  function update(s,config,dt,player,camera,attention=false){
   const t=s.age/1000,visit=(s.age-config.arrival)/1000;
   if(s.phase==='arriving'){
-   const u=smooth(s.age/config.arrival);root.position.copy(arrival.getPoint(u));root.scale.setScalar(count===1?.24+.76*u:.06+.94*u);
+   const u=smooth(s.age/config.arrival);root.position.copy(arrival.getPoint(u));root.scale.setScalar(.20+.80*u);
   }else if(s.phase==='visiting'){
    root.scale.setScalar(1);
    if(detour&&visit-detourAt<detourDuration)root.position.copy(detour.getPoint(smooth((visit-detourAt)/detourDuration)));
