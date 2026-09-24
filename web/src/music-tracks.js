@@ -19,3 +19,5 @@ export const MUSIC_TRACKS={
   ]
 };
 export const NIGHT_BUGS="./public/assets/audio/evening/night-bugs-161789.mp3";
+
+export const MORNING_BED="./public/assets/audio/morning/morning-01.mp3";

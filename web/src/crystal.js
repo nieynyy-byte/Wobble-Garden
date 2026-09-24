@@ -5,7 +5,7 @@ import {canGlow,nightAmount} from './crystal-state.js';
 import {crystalPulse} from './crystal-hold.js';
 import {crystalReflections} from './crystal-reflections.js';
 const COLORS={Lagoon:'#009fc7',Amethyst:'#8229e6',Rose:'#f28eaf',Honey:'#efb353',Jade:'#63d7a0',Ruby:'#ff494b',Citrine:'#f3dc56',Quartz:'#e3f3ff'};
-export const FREE_CRYSTALS=['Lagoon','Amethyst','Ruby'];
+export const FREE_CRYSTALS=['Lagoon','Amethyst','Ruby','Honey'];
 const BIRTH=[10,17,25,34];
 function glowMap(){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,'white');g.addColorStop(.25,'rgba(255,255,255,.6)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,64,64);return new T.CanvasTexture(c);}
 export function createCrystal({reducedMotion=false,renderer}={}){
@@ -13,10 +13,10 @@ export function createCrystal({reducedMotion=false,renderer}={}){
  function setDays(value){days=Math.max(0,Math.min(45,Math.floor(Number(value)||0)));root.visible=days>=10;
   for(const c of clusters){c.root.visible=days>=10&&(mode==='full'||FREE_CRYSTALS.includes(c.id));
    const p=Math.max(0,(days-10)/35),size=.20+.80*p;c.root.scale.setScalar(size);
-   c.root.position.copy(c.position);if(mode==='free'){const i=FREE_CRYSTALS.indexOf(c.id);if(i>=0)c.root.position.set([-1.75,1.8,3.3][i],-.045,[.5,.35,.15][i]);}
+   c.root.position.copy(c.position);if(mode==='free'){const i=FREE_CRYSTALS.indexOf(c.id);if(i>=0)c.root.position.set([-1.75,1.8,3.3,-3.3][i],-.045,[.5,.35,.15,.15][i]);}
    c.meshes.forEach((m,i)=>{m.visible=days>=BIRTH[i];m.scale.setScalar(.55+.45*Math.max(0,(days-BIRTH[i])/(45-BIRTH[i])));});
    if(!c.root.visible)c.at=-Infinity;
-  }if(seats)seats.visible=mode==='full'&&days===45;
+  }if(seats){seats.visible=days===45;for(const seat of seats.children)seat.visible=mode==='full'||[1,3,5].includes(seat.userData.seat_id);}
  }
  const ready=(async()=>{
   const loader=new GLTFLoader(),g=await loader.loadAsync(new URL('../public/assets/models/crystal-garden-v08/garden.glb',import.meta.url).href);g.scene.updateMatrixWorld(true);

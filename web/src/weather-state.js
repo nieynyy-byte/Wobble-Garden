@@ -11,5 +11,8 @@ export function rainFromCurrent(current){
  if([65,67,82,95,96,99].includes(code))return 'heavy';
  if([63,66,81].includes(code))return 'rain';
  if([51,53,55,56,57,61,80].includes(code))return 'light';
+ // Liquid amounts are a fallback when the summary code still says dry/cloudy.
+ // Keep snow codes excluded; do not infer a storm from an accumulation amount.
+ if(![71,73,75,77,85,86].includes(code)&&[current.rain,current.showers].some(v=>Number.isFinite(v)&&v>0))return 'light';
  return 'clear';
 }

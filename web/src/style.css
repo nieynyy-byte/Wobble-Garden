@@ -30,3 +30,15 @@
 dialog h2{font-size:26px;font-weight:700}
 .growth-preview h2{font-size:24px;font-weight:700}
 @media(max-width:370px),(max-height:740px){.home-greeting h2{font-size:32px}.growth-preview h2{font-size:21px}}
+
+@font-face{font-family:Aileron;src:url('../public/assets/fonts/aileron/Aileron-Black.otf') format('opentype');font-weight:900;font-style:normal;font-display:swap}
+.welcome #home-title{font-weight:900}.home-friend{flex-basis:125px}.owner-access{border-top:1px solid #9ca58d66;padding-top:18px;margin-top:20px}.owner-access p{font-size:13px}.code-row{display:flex;gap:8px}.code-row input{min-width:0}.code-row .primary{width:90px;flex-shrink:0}.owner-access button[data-pot-color]{padding:12px;border-radius:20px;border:1px solid #7b9476;background:#dde8d6;color:#344137;margin:0 5px 8px 0}.owner-access button[data-pot-color=pink]{background:#f1cdd9}.owner-access button[aria-pressed=true]{outline:2px solid #52684c;outline-offset:2px}@media(max-width:370px),(max-height:740px){.home-friend{flex-basis:105px}}
+/* Give the hand-drawn friend its own prominent space on Home. */
+.home-greeting{position:relative;align-items:center;gap:8px}
+.home-greeting h2{flex:1 1 52%;font-size:34px;letter-spacing:-1.2px}
+.home-friend{flex:0 0 46%;min-width:145px;transform:rotate(-7deg) scale(1.08)}
+#owner-colors{padding:4px 0 10px}
+#owner-colors button[data-pot-color]{display:inline-block;width:46px;height:46px;padding:0;margin:4px 14px 4px 0;border:3px solid #f3f1e7;border-radius:50%;box-shadow:0 0 0 1px #64755c66;vertical-align:middle;background:#628a42}
+#owner-colors button[data-pot-color=pink]{background:#edc2cf}
+#owner-colors button[data-pot-color][aria-pressed=true]{outline:2px solid #344b39;outline-offset:3px}
+@media(max-width:370px){.home-greeting h2{font-size:29px}.home-friend{flex-basis:45%;min-width:125px}}
