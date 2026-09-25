@@ -42,3 +42,5 @@ dialog h2{font-size:26px;font-weight:700}
 #owner-colors button[data-pot-color=pink]{background:#edc2cf}
 #owner-colors button[data-pot-color][aria-pressed=true]{outline:2px solid #344b39;outline-offset:3px}
 @media(max-width:370px){.home-greeting h2{font-size:29px}.home-friend{flex-basis:45%;min-width:125px}}
+
+.birthday-fields{display:flex;gap:8px;align-items:center;margin-top:8px}.birthday-fields input{width:65px;min-width:0}.birthday-fields select{padding:12px;border:0;border-radius:10px;background:#eef0e4;color:#344b39;font:inherit}.birthday-fields .primary{width:auto;flex:1;padding:12px;font-size:13px}#birthday-form{margin:16px 0}#birthday-status{font-size:12px}

@@ -16,3 +16,11 @@ export function rainFromCurrent(current){
  if(![71,73,75,77,85,86].includes(code)&&[current.rain,current.showers].some(v=>Number.isFinite(v)&&v>0))return 'light';
  return 'clear';
 }
+
+// Unix timestamps avoid confusing the provider's local timezone with the device.
+export function forecastAt(hourly,time=Date.now()){
+ if(!Array.isArray(hourly?.time))return null;
+ const index=hourly.time.findIndex(t=>Number.isFinite(t)&&time>=t*1000&&time<(t+3600)*1000);
+ if(index<0)return null;
+ try{return {level:rainFromCurrent({weather_code:hourly.weather_code?.[index],rain:hourly.rain?.[index],showers:hourly.showers?.[index]}),validAt:hourly.time[index]*1000};}catch{return null;}
+}
