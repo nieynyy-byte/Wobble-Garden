@@ -4,7 +4,7 @@ export const ARRIVAL_MS=7000,STAY_MS=45000,DEPARTURE_MS=8000,COOLDOWN_MS=300000;
 export const VISIT_MS=ARRIVAL_MS+STAY_MS+DEPARTURE_MS;
 export const ENCOUNTERS={
  saturn:{key:GUEST_KEY,arrival:ARRIVAL_MS,stay:STAY_MS,departure:DEPARTURE_MS,cooldown:COOLDOWN_MS},
- friends:{key:FRIENDS_KEY,arrival:8500,stay:60000,departure:9000,cooldown:7200000}
+ friends:{key:FRIENDS_KEY,arrival:15000,stay:60000,departure:9000,cooldown:7200000}
 };
 export function createGuestState(storage,config=ENCOUNTERS.saturn){
  let taps=0,started=null,until=0,lastTap=-Infinity;

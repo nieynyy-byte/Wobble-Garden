@@ -16,9 +16,9 @@ export function createTraveler(model,{index=0,count=1,potHeight=2,potWidth=2,red
  const laneX=2.0+index*1.25;
  // Begin in the visible sky band beneath the transom, in front of the photo.
  // A shared distant origin with small lane offsets reads as a traveling group.
- const skyX=count===1?.30+entry*.08:2.8+index*.2+entry*.12,skyY=6.7+index*.12;
+ const skyX=count===1?.30+entry*.08:3.8+index*.25+entry*.12,skyY=(count===1?6.7:10.8)+index*.12;
  const cruise=Math.max(3.7,(obstacle?.max.y||3)+radius+.35);
- const arrival=curve([[skyX,skyY,-15.5],[count===1?skyX+.2:2.5+index*.2,6.2+index*.12,-10],[count===1?.45:1.6+index*.1,Math.max(4.0,cruise),-4.0],[anchor.x*.6,cruise,front],[anchor.x+.18,anchor.y+.45,front+.15],anchor.toArray()]);
+ const arrival=curve([[skyX,skyY,-15.5],[count===1?skyX+.2:3.4+index*.2,(count===1?6.2:8.8)+index*.12,-10],[count===1?.45:1.6+index*.1,Math.max(4.0,cruise),-4.0],[anchor.x*.6,cruise,front],[anchor.x+.18,anchor.y+.45,front+.15],anchor.toArray()]);
  let departure,departFrom,detour=null,detourAt=0,detourDuration=3,interactions=0,lastTap=-Infinity,kick=0;
  const eyes=[],rings=[];model.traverse(o=>{if(!o.isMesh)return;o.castShadow=false;o.receiveShadow=true;if(/Pupil|EyeWhite/.test(o.name))eyes.push({o,p:o.position.clone(),s:o.scale.clone(),pupil:/Pupil/.test(o.name),gaze:new T.Vector2(),radius:(o.geometry.boundingSphere||(o.geometry.computeBoundingSphere(),o.geometry.boundingSphere)).radius});if(/ring|orbital/i.test(o.name))rings.push({o,r:o.rotation.clone()});});
  const previous=new T.Vector3(),look=new T.Vector3();let lastVisit=0;let initialized=false,lookAtPlayer=false;
@@ -52,7 +52,7 @@ export function createTraveler(model,{index=0,count=1,potHeight=2,potWidth=2,red
   kick*=Math.exp(-dt*2.8);const reaction=reducedMotion?0:kick;
   const bank=reducedMotion?0:clamp(-velocity.x*.09,-.16,.16)+Math.sin(t*2)*reaction*.08;
   root.rotation.z=T.MathUtils.lerp(root.rotation.z,bank,1-Math.exp(-dt*4));
-  const turn=s.phase==='visiting'&&!player?clamp(Math.atan2(-root.position.x,.8-root.position.z),-1.05,1.05):0;
+  const turn=player?Math.atan2(camera.position.x-root.position.x,camera.position.z-root.position.z):s.phase==='visiting'?clamp(Math.atan2(-root.position.x,.8-root.position.z),-1.05,1.05):0;
   root.rotation.y=T.MathUtils.lerp(root.rotation.y,turn+clamp(velocity.x*.1,-.20,.20)+(reducedMotion?0:Math.sin(t*.35+index)*.04),1-Math.exp(-dt*3));
   root.rotation.x=T.MathUtils.lerp(root.rotation.x,attention&&!player&&!reducedMotion?Math.sin(t*1.1)*.055:0,1-Math.exp(-dt*3));
   for(const ring of rings){ring.o.rotation.copy(ring.r);ring.o.rotation.x+=reaction*Math.sin(t*9)*.07;}

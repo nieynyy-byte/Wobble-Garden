@@ -6,6 +6,7 @@ import {createLiveWeather} from './live-weather.js';
 export function createGardenWeather({scene,room,lighting,storage,music,reducedMotion=false,onChange=()=>{}}){
  const plate=room.getObjectByName('Distant garden photographic plate'),hot=plate.material.map;
  const textures=new Map([['hot',hot]]),rain=createRainLayer(scene,{reducedMotion}),audio=createRainAudio();
+ let suspended=false;
  let season='hot',wanted='',loading='',retryAt=0,override=null;
  const live=createLiveWeather({storage,onChange});
  async function seasonUpdate(date){
@@ -17,15 +18,15 @@ export function createGardenWeather({scene,room,lighting,storage,music,reducedMo
   catch{retryAt=Date.now()+60000; /* Keep the last readable view if offline. */ }
   finally{loading='';}
  }
- const silence=()=>audio.set(rain.getState().amount,music.getState().muted,document.hidden);
+ const silence=()=>audio.set(rain.getState().amount,music.getState().muted,document.hidden||suspended);
  document.addEventListener('visibilitychange',silence);window.addEventListener('pagehide',()=>audio.set(0,true,true));
  live.start();
  const ready=seasonUpdate(new Date());
- return {ready,
+ return {ready,setSuspended(value){suspended=value;silence();},
   update(seconds,date=new Date()){
    seasonUpdate(date);live.tick();const state=live.getState(),level=override?.rain||state.level;
    const amount=rain.update(seconds,RAIN_LEVELS[level]??0,lighting.getState()?.night||0);
-   lighting.setWeather(amount);audio.set(amount,music.getState().muted,document.hidden);
+   lighting.setWeather(amount);audio.set(amount,music.getState().muted,document.hidden||suspended);
   },unlock:()=>audio.unlock(),setEnabled:live.setEnabled,
   setPreview(value){override=value&&{season:['hot','rainy','cool'].includes(value.season)?value.season:thaiSeason(),rain:value.rain in RAIN_LEVELS?value.rain:'clear'};},
   getState:()=>({season,wanted,...live.getState(),preview:override,rain:rain.getState(),audio:audio.getState()}),

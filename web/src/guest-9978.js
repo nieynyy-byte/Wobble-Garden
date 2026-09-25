@@ -47,7 +47,7 @@ export function createGuest9978({scene,actor,camera,storage,reducedMotion=false,
   const trigger=gesture.poll(performance.now());if(trigger)void start(trigger);
   const s=states[kind].state(time),stamp=performance.now(),dt=Math.min(.08,Math.max(.001,(stamp-lastUpdate)/1000));lastUpdate=stamp;
   root.visible=travelers.length>0&&s.active;if(!root.visible)return;
-  for(const [i,traveler] of travelers.entries())traveler.update(s,ENCOUNTERS[kind],dt,time<playerUntil,camera,Math.floor(s.age/8000)%travelers.length===i);
+  for(const [i,traveler] of travelers.entries())traveler.update(s,ENCOUNTERS[kind],dt,kind==='friends'||time<playerUntil,camera,Math.floor(s.age/8000)%travelers.length===i);
   separateTravelers(travelers,obstacleBox);
   if(s.phase!==priorPhase){sound.glide(s.phase==='visiting'?.3:.7);priorPhase=s.phase;lastSound=time;}
   else if(time-lastSound>10000&&s.phase==='visiting'){sound.glide(.18,Math.floor(s.age/10000)%travelers.length);lastSound=time;}
