@@ -174,7 +174,7 @@ function targets(){
 }
 
 let pan={x:0,y:0},smoothPan={x:0,y:0,pan:0};
-const gardenCamera=installCameraDrag(wrap,{enabled:()=>ready&&!blocked&&!festivalActive&&$('welcome').hidden&&!$('details').open,onChange:p=>{pan=p;},onFirstDrag:()=>message('A little look around.')});
+const gardenCamera=installCameraDrag(wrap,{enabled:()=>ready&&!blocked&&!festivalActive&&$('welcome').hidden&&!$('details').open,onChange:p=>{pan=p;},onGesture:()=>crystalHolds.clear(),onFirstDrag:()=>message('A little look around.')});
 const crystalReview=new URLSearchParams(location.search).get('review')==='crystal'&&launchPreview;
 const crystalInputSave=()=>crystalReview&&previewDay!==null?{selectedPlant:'pothos',wateringCount:previewDay,lastWateringDate:dayKey(new Date())}:loadStorage(storage).save;
 const crystalHolds=createCrystalHolds({eligible:()=>!blocked&&(previewDay===null||crystalReview)&&$('welcome').hidden&&!$('details').open&&!document.hidden&&canGlow(crystalInputSave()),trigger:id=>crystal.trigger(id,crystalInputSave(),performance.now()/1000)});
