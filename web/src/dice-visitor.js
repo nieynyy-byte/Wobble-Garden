@@ -1,13 +1,14 @@
 import * as T from 'three';
 import {GLTFLoader} from '../vendor/GLTFLoader.js';
-import {diceVisitEligible} from './dice-visit-state.js';
+import {diceVisitEligible} from './dice-visit-state.js?v=30';
 const ease=x=>{x=T.MathUtils.clamp(x,0,1);return x*x*x*(x*(x*6-15)+10);};
 const path=points=>new T.CatmullRomCurve3(points,false,'centripetal');
 export function createDiceVisitor({scene,actor,camera,getSave,eligible,reducedMotion=false,register=()=>{}}){
- const root=new T.Group();root.name='September 26 dice visitor 9947';root.visible=false;scene.add(root);
+ const root=new T.Group();root.name='September 26–29 dice visitor 9947';root.visible=false;scene.add(root);
  const spinner=new T.Group();root.add(spinner);
- const pupils=[],spinStep=new T.Quaternion(),rollBase=new T.Quaternion(),spinAxis=new T.Vector3();
- let loaded=false,pending=false,error=null,retryAt=0,age=0,rollAge=null,rolls=0,arrival,rolling,anchor,radius=.6;
+ const pupils=[],spinStep=new T.Quaternion(),spinAxis=new T.Vector3();
+ const offset=new T.Vector3(),velocity=new T.Vector3(),dodgeTarget=new T.Vector3();let spinBoost=0;
+ let loaded=false,pending=false,error=null,retryAt=0,age=0,rollAge=null,rolls=0,arrival,anchor,radius=.6;
  async function load(){
   pending=true;
   try{
@@ -43,13 +44,18 @@ export function createDiceVisitor({scene,actor,camera,getSave,eligible,reducedMo
   if(!loaded){if(!pending&&performance.now()>=retryAt)void load();return;}
   age+=dt;
   if(age<16){const u=ease(age/16);root.position.copy(arrival.getPointAt(u));root.scale.setScalar(.18+.82*u);spinner.rotation.set(reducedMotion?0:(1-u)*Math.PI*2,reducedMotion?0:(1-u)*Math.PI*4,reducedMotion?0:(1-u)*Math.PI*2);}
-  else if(rollAge!==null){
-   rollAge+=dt;const u=ease(rollAge/8);root.position.copy(rolling.getPointAt(u));spinStep.setFromEuler(new T.Euler(reducedMotion?0:Math.PI*2*u,0,reducedMotion?0:Math.PI*4*u*(rolls%2?1:-1)));spinner.quaternion.copy(rollBase).multiply(spinStep);
-   if(rollAge>=8){rollAge=null;spinner.quaternion.copy(rollBase);}
-  }else{
-   root.scale.setScalar(1);root.position.copy(anchor);if(!reducedMotion){root.position.y+=Math.sin(age*.65)*.075;root.position.x+=Math.sin(age*.3)*.05;spinAxis.set(Math.sin(age*.071+.4),Math.cos(age*.053),Math.sin(age*.089+1.7)).normalize();spinStep.setFromAxisAngle(spinAxis,dt*.16);spinner.quaternion.multiply(spinStep).normalize();}
+  else{
+   root.scale.setScalar(1);
+   if(rollAge!==null){rollAge+=dt;if(rollAge>1.1)dodgeTarget.multiplyScalar(Math.exp(-dt*1.1));if(rollAge>9&&offset.length()<.005&&velocity.length()<.01)rollAge=null;}
+   // Critically damped motion keeps position and velocity continuous on repeated taps.
+   const omega=3.1,decay=Math.exp(-omega*dt),error=offset.clone().sub(dodgeTarget),term=velocity.clone().addScaledVector(error,omega);
+   offset.copy(dodgeTarget).add(error.addScaledVector(term,dt).multiplyScalar(decay));
+   velocity.addScaledVector(term,-omega*dt).multiplyScalar(decay);
+   root.position.copy(anchor).add(offset);
+   const settle=ease((age-16)/3);
+   if(!reducedMotion){root.position.y+=Math.sin(age*.65)*.075*settle;root.position.x+=Math.sin(age*.3)*.05*settle;spinBoost+=( (rollAge!==null&&rollAge<1.1?.65:0)-spinBoost)*(1-Math.exp(-dt*2));spinAxis.set(Math.sin(age*.071+.4),Math.cos(age*.053),Math.sin(age*.089+1.7)).normalize();spinStep.setFromAxisAngle(spinAxis,dt*(.16+spinBoost)*settle);spinner.quaternion.multiply(spinStep).normalize();}
   }
-  root.rotation.y=Math.atan2(camera.position.x-root.position.x,camera.position.z-root.position.z);
+  root.rotation.y=T.MathUtils.lerp(root.rotation.y,Math.atan2(camera.position.x-root.position.x,camera.position.z-root.position.z),1-Math.exp(-dt*5));
   root.updateWorldMatrix(true,true);
   const lookingAt=new T.Vector3(Math.sin(age*.23)*1.5,1.8+Math.sin(age*.19)*.6,.8);
   if(Math.sin(age*.17)>.2)lookingAt.copy(camera.position);
@@ -64,13 +70,14 @@ export function createDiceVisitor({scene,actor,camera,getSave,eligible,reducedMo
   }
  }
  function interact(ray){
-  if(!root.visible||age<16||rollAge!==null)return false;
+  if(!root.visible||age<16)return false;
   root.updateMatrixWorld(true);const hit=ray.intersectObject(root,true)[0];if(!hit)return false;
   const blocker=ray.intersectObject(actor,true).find(h=>{for(let o=h.object;o;o=o.parent)if(!o.visible)return false;return true;});if(blocker&&blocker.distance<hit.distance)return false;
-  rolls++;rollAge=0;rollBase.copy(spinner.quaternion);
-  // Stay on the pot's right side; roll on the tabletop, then buoyantly return.
-  const outer=anchor.x-.15-(rolls%3)*.10,ground=radius+.05;
-  rolling=path([root.position.clone(),new T.Vector3(outer,ground,anchor.z+.25),new T.Vector3(outer+.12,ground,anchor.z+.65),new T.Vector3(anchor.x,1.5,anchor.z+.4),anchor.clone()]);
+  rolls++;rollAge=0;
+  const away=root.position.clone().sub(hit.point);away.z=0;
+  if(away.length()<.03)away.set(rolls%2?-.7:.4,.6,0);away.normalize();
+  const strength=reducedMotion?.12:.48;
+  dodgeTarget.set(T.MathUtils.clamp(offset.x+away.x*strength,-.55,.20),T.MathUtils.clamp(offset.y+away.y*strength,-.12,.48),.12);
   return true;
  }
  return {root,update,interact,getPosition:()=>root.position.clone(),getState:()=>({visible:root.visible,loaded,pending,error,age,rolls,rolling:rollAge!==null,position:root.position.toArray(),rotation:spinner.quaternion.toArray(),movingEyes:pupils.length,eyeOffsets:pupils.map(e=>e.offset.toArray())})};
