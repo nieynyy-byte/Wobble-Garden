@@ -24,7 +24,12 @@ export function createDiceVisitor({scene,actor,camera,getSave,eligible,reducedMo
     const center=o.parent.worldToLocal(o.localToWorld(o.geometry.boundingBox.getCenter(new T.Vector3())));
     const whiteCenter=o.parent.worldToLocal(white.localToWorld(white.geometry.boundingBox.getCenter(new T.Vector3())));
     const normal=center.clone().sub(whiteCenter).normalize();
-    pupils.push({o,base:o.position.clone(),center,normal,offset:new T.Vector3(),range:o.geometry.boundingSphere.radius*Math.max(o.scale.x,o.scale.y,o.scale.z)*.32});
+    const whiteSize=white.geometry.boundingBox.getSize(new T.Vector3()).multiply(white.scale).toArray().sort((a,b)=>a-b);
+    const pupilSize=o.geometry.boundingBox.getSize(new T.Vector3()).multiply(o.scale).toArray().sort((a,b)=>a-b);
+    const range=Math.max(0,(whiteSize[1]-pupilSize[1])*.5*.85);
+    const up=Math.abs(normal.y)>.9?new T.Vector3(0,0,1):new T.Vector3(0,1,0);
+    const right=new T.Vector3().crossVectors(up,normal).normalize();up.crossVectors(normal,right).normalize();
+    pupils.push({o,base:o.position.clone(),center,normal,right,up,offset:new T.Vector3(),range});
    });
    const pot=new T.Box3().setFromObject(actor.getObjectByName('Pot'));
    anchor=new T.Vector3(.8,1.05,Math.max(1.5,pot.max.z+radius+.22));
@@ -51,7 +56,10 @@ export function createDiceVisitor({scene,actor,camera,getSave,eligible,reducedMo
   for(const eye of pupils){
    const direction=eye.o.parent.worldToLocal(lookingAt.clone()).sub(eye.center);
    direction.addScaledVector(eye.normal,-direction.dot(eye.normal));
-   if(direction.lengthSq()>1e-10)direction.normalize().multiplyScalar(eye.range);
+   if(direction.lengthSq()>1e-10)direction.normalize().multiplyScalar(.2);
+   // Give the small dice pips a readable glance, rather than an almost static camera lock.
+   direction.addScaledVector(eye.right,Math.sin(age*.85)*.85).addScaledVector(eye.up,Math.sin(age*.57+1)*.6);
+   if(direction.length()>1)direction.normalize();direction.multiplyScalar(eye.range);
    eye.offset.lerp(direction,1-Math.exp(-dt*2));eye.o.position.copy(eye.base).add(eye.offset);
   }
  }
@@ -65,5 +73,5 @@ export function createDiceVisitor({scene,actor,camera,getSave,eligible,reducedMo
   rolling=path([root.position.clone(),new T.Vector3(outer,ground,anchor.z+.25),new T.Vector3(outer+.12,ground,anchor.z+.65),new T.Vector3(anchor.x,1.5,anchor.z+.4),anchor.clone()]);
   return true;
  }
- return {root,update,interact,getPosition:()=>root.position.clone(),getState:()=>({visible:root.visible,loaded,pending,error,age,rolls,rolling:rollAge!==null,position:root.position.toArray(),rotation:spinner.quaternion.toArray(),movingEyes:pupils.length})};
+ return {root,update,interact,getPosition:()=>root.position.clone(),getState:()=>({visible:root.visible,loaded,pending,error,age,rolls,rolling:rollAge!==null,position:root.position.toArray(),rotation:spinner.quaternion.toArray(),movingEyes:pupils.length,eyeOffsets:pupils.map(e=>e.offset.toArray())})};
 }
