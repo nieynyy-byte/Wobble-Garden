@@ -1,3 +1,5 @@
+import {meteorEventOpen} from './meteor-schedule.js';
+import {createMeteorTrials} from './meteor-trials.js';
 import {createDiceVisitor} from './dice-visitor.js';
 import {createBirthday} from './birthday.js';
 import {createOwnerAccess} from './owner-access.js';
@@ -23,10 +25,11 @@ import {growthForDays,growthStage,PREVIEW_DAYS,normalizeGrowthDays} from './grow
 const $=id=>document.getElementById(id),canvas=$('scene'),wrap=canvas.parentElement;
 let storage;try{storage=window.localStorage;}catch{}
 const ownerAccess=createOwnerAccess(storage);
+const savedMeteorMark=createMeteorTrials(storage).getState().meteorMarks>0;
 let loaded=loadStorage(storage),save=loaded.save,blocked=loaded.status==='future';
 const festivalReview=new URLSearchParams(location.search).get('review')==='festival';
 const birthdayReview=new URLSearchParams(location.search).get('birthday')==='preview'&&new URLSearchParams(location.search).has('test');
-let meteorQuest,meteorLoading=false,meteorSuspended=false;
+let meteorQuest,meteorLoading=false,meteorSuspended=false,meteorRetryAt=0;
 let birthday,festival,festivalCamera,festivalLoading=false,festivalActive=false,festivalRetryAt=0;
 let crystal,localLighting,guest,diceVisitor,weather,reviewHour=null;
 const music=createGardenMusic({storage,onChange:s=>{const b=$('music');b.setAttribute('aria-pressed',String(!s.muted));b.setAttribute('aria-label',s.muted?'Turn music on':'Mute music');b.classList.toggle('muted',s.muted);}});
@@ -203,7 +206,10 @@ window.addEventListener('pageshow',()=>localLighting?.update(new Date(),true));
 document.addEventListener('visibilitychange',()=>{if(document.hidden){crystalHolds.clear();guest?.resetTaps();clearTimeout(legacyEyeTimer);}else localLighting?.update(new Date(),true);});
 let lastFrame=0,lastTime=0;
 function frame(ms){requestAnimationFrame(frame);if(document.hidden){lastTime=ms;return;}if(ms-lastFrame<1000/30)return;const dt=Math.min(.08,(ms-lastTime)/1000||0);lastTime=ms;lastFrame=ms-(ms-lastFrame)%(1000/30);now+=dt;
- if(ready&&!meteorLoading&&!meteorQuest&&new URLSearchParams(location.search).get('meteor')==='preview'&&new URLSearchParams(location.search).has('test')){meteorLoading=true;import('./meteor-quest.js').then(m=>m.createMeteorQuest({garden:scene,actor,renderer,storage,preview:true,reducedMotion:reduced,muted:()=>music.getState().muted,onSuspend:value=>{meteorSuspended=value;crystalHolds.clear();music.setHidden(value||document.hidden);weather?.setSuspended(value);}})).then(q=>meteorQuest=q).catch(e=>{console.error(e);message('Saturn could not arrive. Please reload to try again.');});}
+ const meteorPreview=reviewAllowed&&new URLSearchParams(location.search).get('meteor')==='preview';
+ const meteorGardenVisible=()=>ready&&!blocked&&$('welcome').hidden&&!$('details').open&&(previewDay===null||meteorPreview);
+ const meteorDue=!meteorQuest&&(meteorEventOpen()||savedMeteorMark);
+ if(ready&&!meteorLoading&&!meteorQuest&&now>=meteorRetryAt&&(meteorPreview||(meteorDue&&save?.selectedPlant&&meteorGardenVisible()))){meteorLoading=true;import('./meteor-quest.js?v=14').then(m=>m.createMeteorQuest({garden:scene,actor,renderer,storage,preview:meteorPreview,available:()=>meteorPreview||meteorEventOpen(),visible:meteorGardenVisible,reducedMotion:reduced,muted:()=>music.getState().muted,onSuspend:value=>{meteorSuspended=value;crystalHolds.clear();music.setHidden(value||document.hidden);weather?.setSuspended(value);}})).then(q=>meteorQuest=q).catch(e=>{meteorRetryAt=now+30;console.error(e);message('Saturn could not arrive. Please reload to try again.');}).finally(()=>meteorLoading=false);}
  if(meteorQuest?.update(dt,camera))return;
  const visualDate=new Date();if(reviewHour!==null)visualDate.setHours(reviewHour,0,0,0);
  weather?.update(now,visualDate);localLighting?.update(visualDate);localLighting?.animate(now);
