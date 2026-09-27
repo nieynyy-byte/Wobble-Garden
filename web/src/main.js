@@ -1,4 +1,4 @@
-import {meteorEventOpen} from './meteor-schedule.js';
+import {meteorEventOpen,moonEventOpen} from './meteor-schedule.js?v=31';
 import {createMeteorTrials} from './meteor-trials.js';
 import {createDiceVisitor} from './dice-visitor.js';
 import {createBirthday} from './birthday.js';
@@ -25,10 +25,19 @@ import {growthForDays,growthStage,PREVIEW_DAYS,normalizeGrowthDays} from './grow
 const $=id=>document.getElementById(id),canvas=$('scene'),wrap=canvas.parentElement;
 let storage;try{storage=window.localStorage;}catch{}
 const ownerAccess=createOwnerAccess(storage);
-const savedMeteorMark=createMeteorTrials(storage).getState().meteorMarks>0;
 let loaded=loadStorage(storage),save=loaded.save,blocked=loaded.status==='future';
 const festivalReview=new URLSearchParams(location.search).get('review')==='festival';
 const birthdayReview=new URLSearchParams(location.search).get('birthday')==='preview'&&new URLSearchParams(location.search).has('test');
+let keepsakeReview,keepsakeLoading,keepsakeRestorePending=false;
+const moonTrials=()=>createMeteorTrials({getItem:k=>storage?.getItem(k+'.moon'),setItem:(k,v)=>storage.setItem(k+'.moon',v)}).getState();
+async function ensureKeepsake(){
+ if(keepsakeReview)return keepsakeReview;
+ if(!keepsakeLoading)keepsakeLoading=import('./meteor-keepsake-review.js?v=release31').then(m=>{
+  keepsakeReview=m.createKeepsakeReview({actor,storage,preview:moonReview,onHour:h=>{if(moonReview)reviewHour=h;}});
+  return keepsakeReview;
+ }).catch(e=>{keepsakeLoading=null;throw e;});
+ return keepsakeLoading;
+}
 let meteorQuest,meteorLoading=false,meteorSuspended=false,meteorRetryAt=0;
 let birthday,festival,festivalCamera,festivalLoading=false,festivalActive=false,festivalRetryAt=0;
 let crystal,localLighting,guest,diceVisitor,weather,reviewHour=null;
@@ -61,6 +70,7 @@ if(loaded.status==='corrupt'){$('save-note').textContent='Your old save could no
 if(blocked){$('loading').textContent='Please open the latest version to load this garden.';}
 const reviewHost=['localhost','127.0.0.1','[::1]'].includes(location.hostname)||/^(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(location.hostname);
 const reviewAllowed=reviewHost&&new URLSearchParams(location.search).has('test');
+const moonReview=reviewAllowed&&new URLSearchParams(location.search).get('quest')==='2'&&new URLSearchParams(location.search).get('meteor')==='preview';
 const launchPreview=reviewAllowed&&new URLSearchParams(location.search).get('preview')==='growth';
 let previewSpecies=new URLSearchParams(location.search).get('species')||'pothos';
 let previewDay=null,selected=save?.selectedPlant||'pothos',plantRoot;const plants=new Map();
@@ -159,6 +169,7 @@ async function boot(){
  for(let i=0;i<20;i++){const d=new THREE.Mesh(new THREE.SphereGeometry(.035,8,6),waterMat);d.scale.y=1.7;d.visible=false;scene.add(d);drops.push(d);}
  for(let i=0;i<3;i++){const r=new THREE.Mesh(new THREE.TorusGeometry(.1,.009,5,32),new THREE.MeshBasicMaterial({color:'#9cbcd0',transparent:true,opacity:.5}));r.rotation.x=-Math.PI/2;r.position.y=1.58;r.visible=false;scene.add(r);ripples.push(r);}
  await document.fonts.load('900 164px Aileron');birthday=createBirthday({scene,actor,storage,reducedMotion:reduced});
+ if(moonReview||(!launchPreview&&moonTrials().passed)){await ensureKeepsake();if(!moonReview){keepsakeReview.unlock();keepsakeRestorePending=!keepsakeReview.getState().choice;}}
  if(festivalReview){festivalActive=true;camera.far=90;camera.updateProjectionMatrix();festival=await (await import('./festival.js')).createFestival({scene,renderer,reducedMotion:reduced,tier:ownerAccess.getState().owner?'owner':'free'});festivalCamera=installFestivalCamera(wrap,{enabled:()=>festivalActive});reviewHour=21;}
  if(birthdayReview&&!festivalReview)reviewHour=new URLSearchParams(location.search).get('night')==='1'?21:10;
  await weather.ready;weather.update(0,new Date());localLighting.update(new Date(),true);
@@ -208,8 +219,22 @@ let lastFrame=0,lastTime=0;
 function frame(ms){requestAnimationFrame(frame);if(document.hidden){lastTime=ms;return;}if(ms-lastFrame<1000/30)return;const dt=Math.min(.08,(ms-lastTime)/1000||0);lastTime=ms;lastFrame=ms-(ms-lastFrame)%(1000/30);now+=dt;
  const meteorPreview=reviewAllowed&&new URLSearchParams(location.search).get('meteor')==='preview';
  const meteorGardenVisible=()=>ready&&!blocked&&$('welcome').hidden&&!$('details').open&&(previewDay===null||meteorPreview);
- const meteorDue=!meteorQuest&&(meteorEventOpen()||savedMeteorMark);
- if(ready&&!meteorLoading&&!meteorQuest&&now>=meteorRetryAt&&(meteorPreview||(meteorDue&&save?.selectedPlant&&meteorGardenVisible()))){meteorLoading=true;import('./meteor-quest.js?v=14').then(m=>m.createMeteorQuest({garden:scene,actor,renderer,storage,preview:meteorPreview,available:()=>meteorPreview||meteorEventOpen(),visible:meteorGardenVisible,reducedMotion:reduced,muted:()=>music.getState().muted,onSuspend:value=>{meteorSuspended=value;crystalHolds.clear();music.setHidden(value||document.hidden);weather?.setSuspended(value);}})).then(q=>meteorQuest=q).catch(e=>{meteorRetryAt=now+30;console.error(e);message('Saturn could not arrive. Please reload to try again.');}).finally(()=>meteorLoading=false);}
+ const firstPassed=createMeteorTrials(storage).getState().meteorMarks>0;
+ const desiredQuest=moonReview?2:(!meteorPreview&&moonEventOpen()&&firstPassed?2:1);
+ if(meteorQuest&&meteorQuest.getState().quest!==desiredQuest&&['home','alert','invite'].includes(meteorQuest.getState().encounterPhase)){meteorQuest.dispose();meteorQuest=null;}
+ const meteorDue=!meteorQuest&&(meteorEventOpen()||(moonEventOpen()&&firstPassed)||firstPassed);
+ if(ready&&!meteorLoading&&!meteorQuest&&now>=meteorRetryAt&&(meteorPreview||(meteorDue&&save?.selectedPlant&&meteorGardenVisible()))){
+  meteorLoading=true;
+  const quest=desiredQuest;
+  import('./meteor-quest.js?v=31').then(m=>m.createMeteorQuest({garden:scene,actor,renderer,storage,preview:meteorPreview,quest,
+   onComplete:()=>ensureKeepsake().then(k=>{k.complete();if($('open-keepsake'))$('open-keepsake').hidden=false;}).catch(e=>{console.error(e);message('Your trial is saved. Reload to choose your keepsake.');}),
+   available:()=>meteorPreview||(quest===2?moonEventOpen()&&createMeteorTrials(storage).getState().meteorMarks>0:meteorEventOpen()),
+   visible:()=>meteorGardenVisible()&&!keepsakeReview?.getState().open,reducedMotion:reduced,muted:()=>music.getState().muted,
+   onSuspend:value=>{meteorSuspended=value;crystalHolds.clear();music.setHidden(value||document.hidden);weather?.setSuspended(value);}
+  })).then(q=>meteorQuest=q).catch(e=>{meteorRetryAt=now+30;console.error(e);message('Saturn could not arrive. Please reload to try again.');}).finally(()=>meteorLoading=false);
+ }
+ if(keepsakeReview?.getState().passed)if($('open-keepsake'))$('open-keepsake').hidden=false;
+ if(keepsakeRestorePending&&meteorGardenVisible()){keepsakeRestorePending=false;keepsakeReview.show();}
  if(meteorQuest?.update(dt,camera))return;
  const visualDate=new Date();if(reviewHour!==null)visualDate.setHours(reviewHour,0,0,0);
  weather?.update(now,visualDate);localLighting?.update(visualDate);localLighting?.animate(now);
@@ -246,7 +271,10 @@ function frame(ms){requestAnimationFrame(frame);if(document.hidden){lastTime=ms;
  mini.visible=et>=.5&&et<3.9&&!guest?.root.visible;if(mini.visible){const t=(et-.5)/3.4;mini.position.set(easterVariant===0?-1.65+t*3.3:1.12,-.06+Math.abs(Math.sin(t*Math.PI*4))*.12,-.35);mini.rotation.y=Math.sin(t*8)*.2;if(easterVariant===1)mini.scale.setScalar(.24*Math.sin(Math.PI*t)**.25);else mini.scale.setScalar(.24);}
  gardenCamera.update(dt);const cameraEase=1-Math.exp(-18*dt);smoothPan.x+=(pan.x-smoothPan.x)*cameraEase;smoothPan.y+=(pan.y-smoothPan.y)*cameraEase;smoothPan.pan+=((pan.pan||0)-smoothPan.pan)*cameraEase;const distance=Math.max(11.8,5.2/camera.aspect)*(pan.zoom||1)*(birthday?.getState().active&&!festivalActive?1.35:1),yaw=.021+smoothPan.x,pitch=.106+smoothPan.y;camera.position.set(smoothPan.pan+Math.sin(yaw)*distance*Math.cos(pitch),2.15+Math.sin(pitch)*distance,Math.cos(yaw)*distance*Math.cos(pitch));camera.lookAt(smoothPan.pan,2.15,0);
  if(festivalActive&&festival){const v=festivalCamera.update(dt),d=Math.max(17,12/camera.aspect)*v.zoom;camera.position.set(1+v.x+Math.sin(v.yaw)*d,5.2,Math.cos(v.yaw)*d);camera.lookAt(1+v.x,2.4,0);festival.update(now,camera);}
+ keepsakeReview?.update(now,dt,camera,(new Date().getHours()<6||new Date().getHours()>=19)?1:0);
  renderer.render(scene,camera);targets();
 }
-if(new URLSearchParams(location.search).has('test'))window.__wobble={getDiceVisitor:()=>diceVisitor?.getState(),getDiceScreen:()=>{const p=diceVisitor?.getPosition().project(camera),r=canvas.getBoundingClientRect();return p?{x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height}:null;},advanceMeteor:seconds=>meteorQuest?.advanceForTest(seconds),getMeteor:()=>meteorQuest?.getState(),getBirthday:()=>birthday?.getState(),getBirthdayTargets:()=>birthday?.getPositions().map(v=>{const p=v.project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};}),advanceFestival:seconds=>festival?.update(now+seconds,camera),getFestivalTargets:()=>festival?.getPositions().map(o=>{const p=o.position.project(camera),r=canvas.getBoundingClientRect();return {name:o.name,x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};}),getOwner:()=>ownerAccess.getState(),getFestival:()=>festival?.getState(),getFestivalCamera:()=>festivalCamera?.getState(),getState:()=>structuredClone(save),getMusic:()=>music.getState(),getGuest:()=>guest?.getState(),getGuestScreen:(index=0)=>{const p=guest?.getPositions()[index];if(!p)return null;p.project(camera);const r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};},setReviewHour:h=>{reviewHour=h===null?null:Math.max(0,Math.min(23,Number(h)||0));},getWeather:()=>weather?.getState(),setWeatherPreview:v=>weather?.setPreview(v),getLighting:()=>localLighting?.getState(),setCrystalMode:m=>crystal?.setMode(m),getCrystalHolds:()=>crystalHolds.getState(),getCrystal:()=>crystal?.getState(),getCrystalScreen:(index=0)=>{const p=(crystal.getTapPositions()[index]||crystal.getTapPosition()).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};},getPlant:()=>plantRoot?.name,getGrowth:()=>({stage:plantRoot?.userData.growthStage,leafCount:plantRoot?.userData.leafCount,previewDay}),previewGrowth,closePreview,exportArtwork:()=>{const current=save.selectedPlant||selected;for(const p of PLANTS)swapPlant(p.id);swapPlant(current);scene.updateMatrixWorld(true);const meshes=[];for(const root of [actor,env])root.traverse(o=>{if(!o.isMesh||o.material.isShaderMaterial)return;let group='Room',parent=o;if(root===actor){group='Wobble';while(parent&&parent!==actor){if(parent.name==='PothosSeedling')group='pothos';if(parent.name.startsWith('Plant_'))group=parent.name.slice(6);parent=parent.parent;}}const g=o.geometry,m=o.material;meshes.push({name:o.name||'Mesh',group,vertices:Array.from(g.attributes.position.array),indices:g.index?Array.from(g.index.array):null,matrix:o.matrixWorld.toArray(),color:m.color?.toArray()||[.5,.5,.5],roughness:m.roughness??.8});});return {selected:current,meshes};},getCamera:()=>camera?.position.toArray(),getOrbit:()=>({...smoothPan,zoom:pan.zoom||1}),getTap:()=>({...tap}),tapEye,water:doWater,shake,getReady:()=>ready,getEffects:()=>({waterRepeat,easterActive:now-easterAt<4,shakeActive:now-shakeAt<1.5}),getPerformance:()=>({drawCalls:renderer?.info.render.calls,triangles:renderer?.info.render.triangles}),motion};
+if(new URLSearchParams(location.search).has('test'))window.__wobble={getKeepsake:()=>keepsakeReview?.getState(),previewKeepsakeCompletion:()=>{if(moonReview){meteorQuest?.home();return keepsakeReview?.complete();}},showKeepsake:()=>keepsakeReview?.show(),resetKeepsake:()=>moonReview&&keepsakeReview?.reset(),getDiceVisitor:()=>diceVisitor?.getState(),getDiceScreen:()=>{const p=diceVisitor?.getPosition().project(camera),r=canvas.getBoundingClientRect();return p?{x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height}:null;},advanceMeteor:seconds=>meteorQuest?.advanceForTest(seconds),getMeteor:()=>meteorQuest?.getState(),getBirthday:()=>birthday?.getState(),getBirthdayTargets:()=>birthday?.getPositions().map(v=>{const p=v.project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};}),advanceFestival:seconds=>festival?.update(now+seconds,camera),getFestivalTargets:()=>festival?.getPositions().map(o=>{const p=o.position.project(camera),r=canvas.getBoundingClientRect();return {name:o.name,x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};}),getOwner:()=>ownerAccess.getState(),getFestival:()=>festival?.getState(),getFestivalCamera:()=>festivalCamera?.getState(),getState:()=>structuredClone(save),getMusic:()=>music.getState(),getGuest:()=>guest?.getState(),getGuestScreen:(index=0)=>{const p=guest?.getPositions()[index];if(!p)return null;p.project(camera);const r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};},setReviewHour:h=>{reviewHour=h===null?null:Math.max(0,Math.min(23,Number(h)||0));},getWeather:()=>weather?.getState(),setWeatherPreview:v=>weather?.setPreview(v),getLighting:()=>localLighting?.getState(),setCrystalMode:m=>crystal?.setMode(m),getCrystalHolds:()=>crystalHolds.getState(),getCrystal:()=>crystal?.getState(),getCrystalScreen:(index=0)=>{const p=(crystal.getTapPositions()[index]||crystal.getTapPosition()).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x*.5+.5)*r.width,y:r.top+(-p.y*.5+.5)*r.height};},getPlant:()=>plantRoot?.name,getGrowth:()=>({stage:plantRoot?.userData.growthStage,leafCount:plantRoot?.userData.leafCount,previewDay}),previewGrowth,closePreview,exportArtwork:()=>{const current=save.selectedPlant||selected;for(const p of PLANTS)swapPlant(p.id);swapPlant(current);scene.updateMatrixWorld(true);const meshes=[];for(const root of [actor,env])root.traverse(o=>{if(!o.isMesh||o.material.isShaderMaterial)return;let group='Room',parent=o;if(root===actor){group='Wobble';while(parent&&parent!==actor){if(parent.name==='PothosSeedling')group='pothos';if(parent.name.startsWith('Plant_'))group=parent.name.slice(6);parent=parent.parent;}}const g=o.geometry,m=o.material;meshes.push({name:o.name||'Mesh',group,vertices:Array.from(g.attributes.position.array),indices:g.index?Array.from(g.index.array):null,matrix:o.matrixWorld.toArray(),color:m.color?.toArray()||[.5,.5,.5],roughness:m.roughness??.8});});return {selected:current,meshes};},getCamera:()=>camera?.position.toArray(),getOrbit:()=>({...smoothPan,zoom:pan.zoom||1}),getTap:()=>({...tap}),tapEye,water:doWater,shake,getReady:()=>ready,getEffects:()=>({waterRepeat,easterActive:now-easterAt<4,shakeActive:now-shakeAt<1.5}),getPerformance:()=>({drawCalls:renderer?.info.render.calls,triangles:renderer?.info.render.triangles}),motion};
 boot();
+
+$('open-keepsake')?.addEventListener('click',()=>{$('details').close();keepsakeReview?.show();});
