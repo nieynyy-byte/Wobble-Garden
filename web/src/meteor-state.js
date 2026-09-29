@@ -1,5 +1,5 @@
 // Trial results live separately from all plant/growth data.
-export const TRIAL_RULES={kills:20,maxMisses:5,bossDamage:6,duration:90};
+export const TRIAL_RULES={kills:20,maxMisses:10,bossDamage:6,duration:90};
 export function createMeteorState({random=Math.random}={}){
  let phase='battle',elapsed=0,next=1,boss=false,wave=0,id=0,kills=0,misses=0,bossDamage=0,passed=false;const meteors=[];
  function spawn(kind,width=9){const giant=kind==='giant';const m={id:++id,kind,hp:giant?18:kind==='fireball'?10:kind==='medium'?3:1,r:giant?2.6:kind==='fireball'?1.15:kind==='medium'?1.05:.60,x:giant?0:(random()*2-1)*Math.min(width-1,8),y:giant?6.3:8,z:0,speed:giant?.53:kind==='fireball'?1.5:kind==='medium'?1.375:2.3125+random()*.825,spin:random()*2-1,playerDamage:0};m.vx=giant?0:((random()*2-1)*Math.min(width*.3,3)-m.x)*m.speed/12;meteors.push(m);return m;}

@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {createSkyTravel,PORTAL_DURATION} from './meteor-sky-travel.js?v=8';
 import {GLTFLoader} from '../vendor/GLTFLoader.js';
-import {createMeteorState,TRIAL_RULES} from './meteor-state.js?v=11';
+import {createMeteorState,TRIAL_RULES} from './meteor-state.js?v=32';
 import {createMeteorMaterial} from './meteor-material.js';
 import {createMeteorTrials} from './meteor-trials.js';
 
