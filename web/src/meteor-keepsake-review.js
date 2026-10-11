@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {createMeteorKeepsakes} from './meteor-keepsake-model.js?v=release31';
 import {createKeepsakeState} from './meteor-keepsake-state.js?v=31';
-export function createKeepsakeReview({actor,storage,onHour=()=>{},preview=true}){
+export function createKeepsakeReview({actor,storage,onHour=()=>{},onClose=()=>{},preview=true}){
  const state=createKeepsakeState(storage,{preview}),model=createMeteorKeepsakes(actor);actor.add(model.root);model.set(null);
  let selected=state.getState().choice||'necklace',open=false,night=false,yaw=-.08,targetYaw=-.08;
  const ui=document.createElement('section');ui.className='keepsake-review';ui.hidden=true;
@@ -23,8 +23,8 @@ export function createKeepsakeReview({actor,storage,onHour=()=>{},preview=true})
  q('[data-cancel]').onclick=()=>{q('[data-confirm]').hidden=true;refresh();};
  q('[data-lock]').onclick=()=>{if(state.choose(selected)){q('[data-confirm]').hidden=true;q('.keepsake-note').textContent=preview?'Your keepsake is saved in this preview.':'Your keepsake is yours to keep.';refresh();}else q('.keepsake-note').textContent='Could not save the choice. Please try again.';};
  q('[data-wear]').onclick=()=>{if(state.equip(!state.getState().equipped))refresh();else q('.keepsake-note').textContent='Could not save. Please try again.';};
- q('[data-close]').onclick=()=>{open=false;ui.hidden=true;document.body.classList.remove('keepsake-open');actor.rotation.y=-.08;const saved=state.getState();model.set(saved.choice&&saved.equipped?saved.choice:null);onHour(null);};
- function show(){if(!state.getState().passed)return false;open=true;ui.hidden=false;document.body.classList.add('keepsake-open');if(preview)onHour(night?22:10);refresh();return true;}
+ q('[data-close]').onclick=()=>{open=false;ui.hidden=true;document.body.classList.remove('keepsake-open');actor.rotation.y=-.08;const saved=state.getState();model.set(saved.choice&&saved.equipped?saved.choice:null);onHour(null);onClose();};
+ function show(kind=null){if(!state.getState().choice&&['necklace','bandana'].includes(kind))selected=kind;if(!state.getState().passed)return false;open=true;ui.hidden=false;document.body.classList.add('keepsake-open');if(preview)onHour(night?22:10);refresh();return true;}
  if(state.getState().choice)model.set(state.getState().equipped?state.getState().choice:null);
  return {unlock:()=>state.complete(),complete(){if(!state.complete())return false;return show();},show,reset(){if(!preview)return false;state.reset();model.set(null);open=false;ui.hidden=true;document.body.classList.remove('keepsake-open');onHour(null);},update(time,dt,camera,darkness=0){if(open){yaw=T.MathUtils.lerp(yaw,targetYaw,1-Math.exp(-dt*6));actor.rotation.y=yaw;const wide=camera.aspect>1.2;camera.position.set(wide?1.45:0,2.5,wide?6.5:10);camera.lookAt(wide?1.45:0,wide?1.25:.12,0);}model.update(time,camera,preview?(night?1:0):darkness);},getState:()=>({...state.getState(),open,selected,model:model.getState()}),dispose(){model.dispose();ui.remove();}};
 }
